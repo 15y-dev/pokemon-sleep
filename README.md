@@ -39,6 +39,33 @@ D:\android\platform-tools\adb.exe devices
 
 ## 使い方
 
+### run.ps1(この環境の設定をまとめたもの)
+
+adb のパスやスワイプ距離などの引数は `run.ps1` にまとめてあります。通常はこれを使います。
+
+```powershell
+.\run.ps1                          # 1匹目から637匹を撮影(前面で実行)
+.\run.ps1 -Start 70                # 70匹目の画面を表示した状態から再開
+.\run.ps1 -Start 70 -Background    # バックグラウンドで実行(ログは capture_日時.log)
+.\run.ps1 -Count 3 -OutDir panoramas_test   # 3匹だけ試す
+.\run.ps1 -DryRun                  # 実行せず、組み立てたコマンドだけ表示する
+```
+
+| パラメータ | 既定値 | 内容 |
+|---|---|---|
+| `-Start` | `1` | N匹目の画面を表示した状態から撮影する |
+| `-Count` | `637` | 撮影する総数(ポケモンの数) |
+| `-OutDir` | `panoramas` | 保存先フォルダ |
+| `-Serial` | 自動選択 | 端末のシリアル(USB を優先して選ぶ) |
+| `-Background` | オフ | バックグラウンドで実行し、ログをファイルに出す |
+| `-DryRun` | オフ | コマンドを表示するだけで実行しない |
+
+- 設定値(adb のパス、`--swipe 0.3 --wait 1.0 --thresh 0.8 --margin 16`)は、`run.ps1` の上部にあります。
+- 既に `adb_panorama.py` が動いている間は、多重起動しないようにエラーで止まります。止めるには `Stop-Process -Id <PID>` を使います。
+- 実行できないと言われたときは、`powershell -ExecutionPolicy Bypass -File .\run.ps1` で実行してください。
+
+以降の例は、`run.ps1` を使わずに直接コマンドを書く場合です。
+
 ### 1匹だけ撮影する
 
 スマホで、撮りたいポケモンの詳細画面を**一番上までスクロールした状態**で表示してから実行します。
