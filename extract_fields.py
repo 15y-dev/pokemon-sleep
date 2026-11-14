@@ -91,12 +91,22 @@ def group_lines(toks, tol=12):
     return sorted(lines, key=lambda l: l.yc)
 
 
-def closest(value, choices, cutoff=0.7):
-    """候補の中から一番近いものを返す。戻り値: (結果, 状態)  状態: ok / fixed / unknown"""
+def closest(value, choices, cutoff=0.7, loose=False):
+    """候補の中から一番近いものを返す。戻り値: (結果, 状態)  状態: ok / fixed / unknown
+
+    loose=True のときは、通常のしきい値に届かなくても、1位が十分近く(0.65以上)、
+    2位との差が大きい(0.1以上)ときだけ採用する(名前の一部が欠けた誤読を拾うため)。
+    """
     if value in choices:
         return value, "ok"
     m = difflib.get_close_matches(value, choices, n=1, cutoff=cutoff)
-    return (m[0], "fixed") if m else (value, "unknown")
+    if m:
+        return m[0], "fixed"
+    if loose and value:
+        scores = sorted(((difflib.SequenceMatcher(None, value, ch).ratio(), ch) for ch in choices), reverse=True)
+        if scores[0][0] >= 0.65 and scores[0][0] - scores[1][0] >= 0.1:
+            return scores[0][1], "fixed"
+    return value, "unknown"
 
 
 def to_int(s):
@@ -349,8 +359,6 @@ def ex_skills(c, rec, H, Y):
     if len(cells) >= 3:
         order += [cells[2][0]]
     order += [""] * (5 - len(order))
-    if len(cells) != 3:
-        c.flag("sub_skills", str(cells), f"サブスキルの行が{len(cells)}行(想定は3行)", "mid")
     names, empty_idx = [], []
     for i, txt in enumerate(order[:5]):
         if DASH.fullmatch(txt):   # 未設定の枠は、名前の代わりに「-」が表示される
@@ -361,7 +369,7 @@ def ex_skills(c, rec, H, Y):
             names.append(None)
             empty_idx.append(i)
             continue
-        best, st_ = closest(txt, SUBSKILLS, 0.75)
+        best, st_ = closest(txt, SUBSKILLS, 0.75, loose=True)
         names.append(best)
         if st_ == "fixed":
             c.flag(f"sub_skill{i + 1}", txt, f"一覧に一番近いもので補正: {best}", "low")
@@ -382,10 +390,16 @@ def ex_skills(c, rec, H, Y):
         if (ri, cx(b) >= 350) in slot_of:
             locked[slot_of[(ri, cx(b) >= 350)]] = True
     for i in empty_idx:
-        if locked[i]:   # 鍵つきバッジはあるが名前が無い = 未設定の枠(「-」表示は OCR が読まない)
+        if locked[i]:   # 鍵つきバッジはあるが名前が無い = 未設定の枠(「-」は小さく、OCR が読まないことがある)
             c.flag(f"sub_skill{i + 1}", "", "名前が無く鍵バッジのみ(未設定の枠とみなす)", "low")
         else:
             c.flag(f"sub_skill{i + 1}", "", "サブスキル名が読めない", "mid")
+    # 名前の行が足りないのは、欠けた枠が「-」(未設定)のとき(上で鍵バッジから判定済み)なら正常。
+    # 鍵バッジも無いのに行が欠けているときだけ、読み落としとして警告する。
+    slots_of_row = ((0, 1), (2, 3), (4,))   # 行ごとの枠(0始まり)
+    for r in range(len(lines), 3):
+        if not all(locked[s] for s in slots_of_row[r]):
+            c.flag("sub_skills", str([ln.text for ln in lines]), f"サブスキルの{r + 1}行目が読めない(鍵バッジも無い)", "mid")
     for i in range(5):
         rec[f"sub_skill{i + 1}"] = names[i]
         rec[f"sub_skill{i + 1}_unlocked"] = not locked[i]
@@ -526,6 +540,47 @@ COLUMNS = [
 ]
 
 
+# CSV の見出し(日本語)。キーは内部名(JSON はこの内部名のまま出力する)
+HEADERS_JA = {
+    "id": "番号", "level": "レベル", "name_text": "名前(ニックネーム含む)", "candy_species": "アメの系統名",
+    "name_is_candy_species": "名前とアメの系統名が同じ", "sp": "SP", "exp_to_next": "次のレベルまでのEXP",
+    "candy_count": "アメの個数", "mood_percent": "機嫌(%)", "status_note": "状態バッジ",
+    "specialty": "とくいなもの", "ribbon_present": "リボンあり", "has_evolve_button": "進化ボタンあり",
+    "berry_count": "きのみの個数", "ingredient1_count": "食材1の個数", "ingredient2_count": "食材2の個数",
+    "ingredient3_count": "食材3の個数", "ingredient2_locked": "食材2は未解放", "ingredient3_locked": "食材3は未解放",
+    "help_interval_sec": "おてつだい時間(秒)", "help_interval_text": "おてつだい時間(表示)",
+    "max_carry": "最大所持数", "main_skill": "メインスキル", "main_skill_level": "メインスキルLv",
+    "main_skill_desc": "メインスキルの説明",
+    "sub_skill1": "サブスキル1", "sub_skill2": "サブスキル2", "sub_skill3": "サブスキル3",
+    "sub_skill4": "サブスキル4", "sub_skill5": "サブスキル5",
+    "sub_skill1_unlocked": "サブスキル1は解放済み", "sub_skill2_unlocked": "サブスキル2は解放済み",
+    "sub_skill3_unlocked": "サブスキル3は解放済み", "sub_skill4_unlocked": "サブスキル4は解放済み",
+    "sub_skill5_unlocked": "サブスキル5は解放済み",
+    "nature": "せいかく", "nature_up": "せいかくで上がる効果", "nature_down": "せいかくで下がる効果",
+    "nature_neutral": "せいかくによる特徴なし", "nature_text": "せいかく(OCR生の文字)",
+    "met_date": "出会った日", "field": "出会ったフィールド", "field_ex": "EXフィールド",
+    "sleep_minutes": "一緒に眠った時間(分)", "sleep_text": "一緒に眠った時間(表示)",
+}
+REVIEW_HEADERS_JA = {"severity": "重要度", "id": "番号", "field": "項目", "value": "読み取った値", "reason": "理由"}
+SEVERITY_JA = {"high": "高(要修正)", "mid": "中(要確認)", "low": "低(補正済み・参考)"}
+# review.csv の「項目」(内部名)を日本語にする。HEADERS_JA に無いもの(処理の段階名など)はここで補う
+FIELD_JA = dict(HEADERS_JA, **{
+    "ingredient_counts": "食材の個数", "ingredient_lock": "食材の解放状態", "help_interval": "おてつだい時間",
+    "sub_skills": "サブスキル(全体)", "sleep_time": "一緒に眠った時間", "nature_effect": "せいかくの効果",
+    "layout": "画面の位置合わせ", "ex_top": "上部の読み取り", "ex_middle": "おてつだい能力の読み取り",
+    "ex_skills": "スキルの読み取り", "ex_detail": "詳細ステータスの読み取り", "ex_sleep": "睡眠時間の読み取り",
+})
+
+
+def ja_cell(v):
+    """CSV に書くときの表示。True/False は「はい/いいえ」、None は空欄。"""
+    if v is True:
+        return "はい"
+    if v is False:
+        return "いいえ"
+    return "" if v is None else v
+
+
 def extract_one(path, today):
     id_ = path.stem
     toks, syms = load_tokens(path)
@@ -544,17 +599,21 @@ def extract_one(path, today):
 
 
 def write_outputs(recs, reviews, out_dir):
+    # CSV は見出し・真偽値を日本語にする。JSON はプログラムから使うので、内部名(英語)のまま
     with open(out_dir / "pokemon.csv", "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
-        w.writeheader()
-        w.writerows(recs)
+        w = csv.writer(f)
+        w.writerow([HEADERS_JA[k] for k in COLUMNS])
+        for r in recs:
+            w.writerow([ja_cell(r.get(k)) for k in COLUMNS])
     (out_dir / "pokemon.json").write_text(json.dumps(recs, ensure_ascii=False, indent=1), encoding="utf-8")
     order = {"high": 0, "mid": 1, "low": 2}
     reviews = sorted(reviews, key=lambda r: (order[r["severity"]], r["field"], r["id"]))
+    keys = ["severity", "id", "field", "value", "reason"]
     with open(out_dir / "review.csv", "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["severity", "id", "field", "value", "reason"])
-        w.writeheader()
-        w.writerows({k: r[k] for k in w.fieldnames} for r in reviews)
+        w = csv.writer(f)
+        w.writerow([REVIEW_HEADERS_JA[k] for k in keys])
+        for r in reviews:
+            w.writerow([SEVERITY_JA[r["severity"]], r["id"], FIELD_JA.get(r["field"], r["field"]), r["value"], r["reason"]])
 
 
 def main():

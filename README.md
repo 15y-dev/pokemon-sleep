@@ -248,9 +248,12 @@ $env:PYTHONIOENCODING='utf-8'
 
 | 出力 | 内容 |
 |---|---|
-| `pokemon.csv` | 1匹1行。Excel で開ける(UTF-8 BOM つき) |
-| `pokemon.json` | 同じ内容(JSON) |
-| `review.csv` | 要確認の値。どの画像の、どの項目が、なぜ怪しいか(重要度つき) |
+| `pokemon.csv` | 1匹1行。見出し・「はい/いいえ」とも日本語。Excel で開ける(UTF-8 BOM つき) |
+| `pokemon.json` | 同じ内容(JSON)。プログラムから使いやすいよう、キーは英語の内部名のまま |
+| `review.csv` | 要確認の値。どの画像の、どの項目が、なぜ怪しいか(重要度つき。見出し・項目名とも日本語) |
+
+CSV の見出し(日本語)と JSON のキー(内部名)の対応は、`extract_fields.py` の `HEADERS_JA` にあります。見出しを変えたいときは、そこだけ直します。
+次の「取り出せる項目」の説明に出てくる英語名は、JSON のキーです。
 
 ### 取り出せる項目
 - **基本**: `sp`、`level`、`name_text`(名前の欄。ニックネームのこともある)、`candy_species`(「◯◯のアメ」の◯◯。進化前の系統名)、`name_is_candy_species`、`exp_to_next`、`candy_count`、`mood_percent`、`specialty`(とくいなもの)、`ribbon_present`、`has_evolve_button`
