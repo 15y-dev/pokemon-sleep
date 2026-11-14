@@ -261,8 +261,29 @@ CSV の見出し(日本語)と JSON のキー(内部名)の対応は、`extract_
 - **スキル**: `main_skill`、`main_skill_level`、`main_skill_desc`、`sub_skill1〜5`、`sub_skill1〜5_unlocked`
 - **詳細ステータス**: `nature`、`nature_up`、`nature_down`、`nature_neutral`、`met_date`、`field`、`field_ex`、`sleep_minutes`
 
-### 取り出せないもの(文字ではなくアイコンのため)
-きのみ・食材の種類、タイプ、性別、リボンの種類、お気に入りの星、色違いなど。見本画像との照合が別途必要です。
+### 種名とニックネーム
+名前の欄は、ニックネームのこともあります。ポケモンの名前一覧(`data\pokemon_names.json`)と照合して、分けています。
+- 名前の欄が一覧にある → `種名`(進化後の名前もこれで確定します。例: アメの系統名が「ヒトカゲ」で、名前の欄が「リザード」なら、種名は「リザード」)
+- 一覧にない → `ニックネーム` として別の列に出し、種名は空欄(推測しません)。アメの系統名(進化前の系統)は残ります。
+- アメの系統名が一覧にないときは、一番近い名前に直します(例: ウバー→ウパー、ハモ→パモ)。
+
+一覧のデータは、公開データベース PokeAPI(<https://github.com/PokeAPI/pokeapi>)の `pokemon_species_names.csv`(日本語名、1025種)から作りました。`data\pokemon_species_names.csv`(元データ)と `data\pokemon_names.json`(日本語名と英語名のみ抜き出したもの)です。新しいポケモンが増えたら、元データを取り直して作り直してください。
+
+### アイコンの判定(性別・お気に入り・タイプ)
+`extract_icons.py` が、撮影画像のアイコンの色から判定します(追加インストール不要。通信なし)。
+結果は `icons.json` に出力され、`extract_fields.py` が `pokemon.csv` に結合します。**先に `extract_icons.py` を実行してください。**
+
+```powershell
+.\.venv\Scripts\python.exe extract_icons.py     # icons.json を作る
+.\.venv\Scripts\python.exe extract_fields.py    # pokemon.csv などを作る(icons.json があれば結合する)
+```
+
+- 性別: 青=オス、赤=メス、色なし=性別なし(コイル、メタモン、ミュウツー、ライコウなど)
+- お気に入り: 星が黄色=あり
+- タイプ: アイコンの色を、実データから求めた基準色と比べます。基準から遠い、または他のタイプと近い場合は「不明」にして `review.csv` に出します。色が似たタイプは取り違えやすいので、判定結果の一部は確認が必要です。
+
+### 取り出せないもの(アイコンの見分けが難しいもの)
+きのみ・食材の種類、リボンの種類、色違いなど。見本画像との照合が別途必要です。
 
 ### 補正と要確認
 - 名前の候補が決まっている項目(せいかく、サブスキル、フィールドなど)は、一覧と照合して、OCR の誤読を直します。補正したものは `review.csv` に `low` で残ります。
@@ -276,5 +297,7 @@ CSV の見出し(日本語)と JSON のキー(内部名)の対応は、`extract_
 - `ocr_vision.py`: Google Cloud Vision API で OCR して、結果を1枚ずつ JSON で保存するスクリプト
 - `ocr\`: OCR 結果の保存先(自動作成)
 - `extract_fields.py`: OCR 結果から項目を取り出して `pokemon.csv` / `pokemon.json` / `review.csv` を作るスクリプト
+- `extract_icons.py`: 性別・お気に入り・タイプを、アイコンの色で判定して `icons.json` を作るスクリプト
+- `data\`: ポケモンの名前一覧(PokeAPI 由来)
 - `panoramas\`: 連続撮影の出力先(自動作成)
 - `.venv\`: Python の仮想環境

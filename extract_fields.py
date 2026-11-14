@@ -22,6 +22,7 @@ import difflib
 import json
 import re
 import sys
+import unicodedata
 from collections import Counter, namedtuple
 from datetime import date, datetime
 from pathlib import Path
@@ -528,7 +529,8 @@ def ex_sleep(c, rec, Y):
         c.flag("sleep_time", full, f"末尾が「分」「時間」でない(欠けた疑い): {raw}", "high")
 
 COLUMNS = [
-    "id", "level", "name_text", "candy_species", "name_is_candy_species", "sp", "exp_to_next", "candy_count",
+    "id", "level", "species", "nickname", "name_text", "candy_species", "name_is_candy_species",
+    "type", "gender", "favorite", "sp", "exp_to_next", "candy_count",
     "mood_percent", "status_note", "specialty", "ribbon_present", "has_evolve_button",
     "berry_count", "ingredient1_count", "ingredient2_count", "ingredient3_count",
     "ingredient2_locked", "ingredient3_locked", "help_interval_sec", "help_interval_text", "max_carry",
@@ -542,8 +544,10 @@ COLUMNS = [
 
 # CSV の見出し(日本語)。キーは内部名(JSON はこの内部名のまま出力する)
 HEADERS_JA = {
-    "id": "番号", "level": "レベル", "name_text": "名前(ニックネーム含む)", "candy_species": "アメの系統名",
-    "name_is_candy_species": "名前とアメの系統名が同じ", "sp": "SP", "exp_to_next": "次のレベルまでのEXP",
+    "id": "番号", "level": "レベル", "species": "種名", "nickname": "ニックネーム",
+    "name_text": "名前の欄(OCR)", "candy_species": "アメの系統名",
+    "name_is_candy_species": "種名とアメの系統名が同じ", "type": "タイプ", "gender": "性別", "favorite": "お気に入り",
+    "sp": "SP", "exp_to_next": "次のレベルまでのEXP",
     "candy_count": "アメの個数", "mood_percent": "機嫌(%)", "status_note": "状態バッジ",
     "specialty": "とくいなもの", "ribbon_present": "リボンあり", "has_evolve_button": "進化ボタンあり",
     "berry_count": "きのみの個数", "ingredient1_count": "食材1の個数", "ingredient2_count": "食材2の個数",
@@ -567,7 +571,8 @@ SEVERITY_JA = {"high": "高(要修正)", "mid": "中(要確認)", "low": "低(�
 FIELD_JA = dict(HEADERS_JA, **{
     "ingredient_counts": "食材の個数", "ingredient_lock": "食材の解放状態", "help_interval": "おてつだい時間",
     "sub_skills": "サブスキル(全体)", "sleep_time": "一緒に眠った時間", "nature_effect": "せいかくの効果",
-    "layout": "画面の位置合わせ", "ex_top": "上部の読み取り", "ex_middle": "おてつだい能力の読み取り",
+    "layout": "画面の位置合わせ", "gender": "性別", "favorite": "お気に入り", "type": "タイプ",
+    "species": "種名", "ex_top": "上部の読み取り", "ex_middle": "おてつだい能力の読み取り",
     "ex_skills": "スキルの読み取り", "ex_detail": "詳細ステータスの読み取り", "ex_sleep": "睡眠時間の読み取り",
 })
 
@@ -581,7 +586,62 @@ def ja_cell(v):
     return "" if v is None else v
 
 
-def extract_one(path, today):
+def load_species_names():
+    """ポケモンの名前一覧(data\\pokemon_names.json)を読む。無ければ None(種名の確定は行わない)。"""
+    p = HERE / "data" / "pokemon_names.json"
+    if not p.is_file():
+        return None
+    return [s["ja"] for s in json.loads(p.read_text(encoding="utf-8"))["species"]]
+
+
+def resolve_species(rec, names, c):
+    """名前の欄とアメの系統名を、一覧と照合して、種名・ニックネームに分ける。
+
+    - 名前の欄が一覧にある → 種名(進化後の名前もこれで確定する)
+    - 一覧にない → ニックネーム(種名は推測しない。系統名だけは分かる)
+    - 系統名(「◯◯のアメ」)が一覧にないときは、一番近い名前に直す(例: ウバー→ウパー)
+    """
+    fam = rec.get("candy_species")
+    if fam and fam not in names:
+        m = difflib.get_close_matches(fam, names, n=1, cutoff=0.6)
+        if not m:   # 「パ」→「ハ」のように、濁点・半濁点が落ちた誤読は、清音にそろえて比べる
+            base = unicodedata.normalize("NFD", fam)
+            base = "".join(ch for ch in base if ch not in "\u3099\u309a")
+            same = [n for n in names
+                    if "".join(ch for ch in unicodedata.normalize("NFD", n) if ch not in "\u3099\u309a") == base]
+            m = same[:1] if len(same) == 1 else []
+        if m:
+            c.flag("candy_species", fam, f"一覧に一番近いもので補正: {m[0]}", "low")
+            rec["candy_species"] = fam = m[0]
+        else:
+            c.flag("candy_species", fam, "ポケモンの名前一覧に無い(誤読か新しいポケモン)", "mid")
+    name = rec.get("name_text")
+    if name in names:
+        rec["species"], rec["nickname"] = name, None
+    else:
+        rec["species"], rec["nickname"] = None, name
+        if name:
+            c.flag("species", name, "名前が一覧に無いのでニックネームとみなし、種名は空欄(系統名のみ)", "low")
+    rec["name_is_candy_species"] = (rec["species"] == fam) if rec["species"] and fam else None
+
+
+def merge_icons(recs, reviews, path):
+    """extract_icons.py の結果(icons.json)があれば、性別・お気に入り・タイプを結合する。"""
+    if not path.is_file():
+        return
+    data = json.loads(path.read_text(encoding="utf-8"))
+    by_id = {r["id"]: r for r in data.get("icons", [])}
+    for rec in recs:
+        ic = by_id.get(rec["id"], {})
+        rec["gender"] = ic.get("gender")
+        rec["favorite"] = ic.get("favorite")
+        rec["type"] = ic.get("type")
+    for n in data.get("review", []):
+        sev = "low" if "採用" in n["reason"] else "mid"
+        reviews.append({"id": n["id"], "field": n["field"], "value": "", "reason": n["reason"], "severity": sev})
+
+
+def extract_one(path, today, names=None):
     id_ = path.stem
     toks, syms = load_tokens(path)
     c = Ctx(id_, toks, syms, today)
@@ -595,6 +655,8 @@ def extract_one(path, today):
             fn(c, rec, *args)
         except Exception as e:   # 1枚の失敗で全体を止めない
             c.flag(fn.__name__, "", f"処理中にエラー: {type(e).__name__}: {e}", "high")
+    if names:
+        resolve_species(rec, names, c)
     return rec, c.review
 
 
@@ -635,11 +697,15 @@ def main():
     if not files:
         sys.exit(f"OCR 結果がありません: {a.ocr_dir}")
 
+    names = load_species_names()
+    if names is None:
+        print("注意: data\\pokemon_names.json が無いので、種名の確定は行いません(名前の欄をそのまま出します)")
     recs, reviews = [], []
     for f in files:
-        rec, rev = extract_one(f, today)
+        rec, rev = extract_one(f, today, names)
         recs.append(rec)
         reviews += rev
+    merge_icons(recs, reviews, Path(a.out_dir) / "icons.json")
 
     if a.ids:
         for rec, f in zip(recs, files):
