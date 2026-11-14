@@ -132,6 +132,62 @@ def stars(points):
     return 1
 
 
+# ===================== 角度別の評価 =====================
+# 同じ個体を、複数の物差し(角度)で評価する。総合(目的に合わせたもの)のほかに、下の5つ。
+# 角度ごとに「効くサブスキルの点数表」と「せいかくで上がると嬉しい(下がると困る)効果」を持つ。
+# 点数の付け方(前半3枠=1、4・5枠目=0.5、せいかく±2)は総合と同じ。月の数は、その角度の理論上の最大点に対する割合で決める。
+AXES = {
+    # 角度: (点数表, せいかくの効果, ひとこと)
+    "おてつだい": ({"おてつだいスピードM": 2, "おてつだいスピードS": 1, "おてつだいボーナス": 2},
+                {SPEED}, "おてつだい時間の短さ(スピード系とボーナス)"),
+    "食材": ({"食材確率アップM": 2, "食材確率アップS": 1, "最大所持数アップL": 1, "最大所持数アップM": 1},
+           {SPEED, "食材おてつだい確率"}, "食材の集めやすさ"),
+    "スキル": ({"スキル確率アップM": 2, "スキル確率アップS": 1, "スキルレベルアップM": 2, "スキルレベルアップS": 1},
+            {SPEED, "メインスキル発生確率"}, "メインスキルの出やすさ・強さ"),
+    "きのみ": ({"きのみの数S": 2, "最大所持数アップL": 1, "最大所持数アップM": 1},
+            {SPEED}, "きのみの集めやすさ"),
+    "サポート": ({"おてつだいボーナス": 2, "睡眠EXPボーナス": 1, "げんき回復ボーナス": 1,
+              "ゆめのかけらボーナス": 1, "リサーチEXPボーナス": 1},
+             set(), "チーム全体やプレイヤーに効く金スキル"),
+}
+AXIS_RATIO_STEPS = ((0.75, 5), (0.55, 4), (0.33, 3), (0.17, 2))   # (最大点に対する割合, 月の数)。総合の STAR_STEPS とほぼ同じ割合
+
+
+def axis_points(rec, key):
+    table, effects, _ = AXES[key]
+    pts, seen = 0.0, set()
+    for i in range(5):
+        name = rec.get(f"sub_skill{i + 1}")
+        v = table.get(name, 0)
+        if v and name not in seen:
+            seen.add(name)
+            pts += v * SLOT_WEIGHT[i]
+    if rec.get("nature_up") in effects:
+        pts += NATURE_POINT
+    if rec.get("nature_down") in effects:
+        pts -= NATURE_POINT
+    return pts
+
+
+def axis_max(key):
+    table, effects, _ = AXES[key]
+    vals = sorted(table.values(), reverse=True)[:5]
+    return sum(v * w for v, w in zip(vals, SLOT_WEIGHT)) + (NATURE_POINT if effects else 0)
+
+
+def axis_moons(pts, key):
+    ratio = pts / axis_max(key)
+    for th, n in AXIS_RATIO_STEPS:
+        if ratio >= th:
+            return n
+    return 1
+
+
+def axis_all(rec):
+    """戻り値: {角度: (点数, 月の数)}"""
+    return {k: (axis_points(rec, k), axis_moons(axis_points(rec, k), k)) for k in AXES}
+
+
 # 「アメの系統名(進化前)」から、Wiki の候補に進化できるもの。ニックネームで種名が分からない個体や、
 # 進化前の個体も、育てれば候補になるので拾う。
 # (アメの系統名 -> 進化後の候補)。好物のきのみで絞った後に使うので、タイプが合わないもの(カメックスなど)は出てこない。
@@ -159,6 +215,55 @@ def dessert_ingredients(rec):
     """
     return [rec[f"ingredient{s}"] for s in (1, 2, 3) if rec.get(f"ingredient{s}") in NEW_DESSERT_INGREDIENTS]
 
+SPEED_SUB = {"おてつだいスピードS": 0.07, "おてつだいスピードM": 0.14}
+SPEED_SUB_CAP = 0.35      # Wiki: サブスキルによるおてつだいスピードの合計は最大35%まで
+LEVEL_STEP = 0.002        # レベルが1上がるごとに、おてつだい時間が0.2%短くなる(479匹の画面の値で確認)
+
+
+def speed_bonus(rec, only_unlocked):
+    s = 0.0
+    for i in range(1, 6):
+        if only_unlocked and not rec.get(f"sub_skill{i}_unlocked"):
+            continue
+        s += SPEED_SUB.get(rec.get(f"sub_skill{i}"), 0.0)
+    return min(s, SPEED_SUB_CAP)
+
+
+def help_time_after(rec, at_level=None):
+    """計算後のおてつだい時間(秒)。画面の値は、今のレベル・せいかく・解放済みのサブスキルを反映済みなので、
+    そこから、未解放のおてつだいスピードS/Mを反映する。at_level を指定すると、そのレベルでの時間にする。
+    (画面の値と、公開データの基本の時間から計算した値は、479匹で ±0.05% 以内で一致)
+    おてつだいボーナス(チーム全体に効く)は含めない。"""
+    sec = rec.get("help_interval_sec")
+    if not sec:
+        return None
+    t = sec * (1 - speed_bonus(rec, False)) / (1 - speed_bonus(rec, True))
+    lv = rec.get("level")
+    if at_level and lv:
+        t *= (1 - (at_level - 1) * LEVEL_STEP) / (1 - (lv - 1) * LEVEL_STEP)
+    return int(round(t))
+
+
+CARRY_SUB = {"最大所持数アップS": 6, "最大所持数アップM": 12, "最大所持数アップL": 18}   # きのみ・食材の最大所持数が増える個数
+
+
+def carry_after(rec):
+    """計算後の最大所持数(個)。画面の値は、解放済みの「最大所持数アップ」までを反映済み(473匹で確認)なので、
+    そこへ、未解放の「最大所持数アップ」S/M/L を足す。"""
+    mc = rec.get("max_carry")
+    if not mc:
+        return None
+    return mc + sum(CARRY_SUB.get(rec.get(f"sub_skill{i}"), 0) for i in range(1, 6) if not rec.get(f"sub_skill{i}_unlocked"))
+
+
+def fmt_hms(sec):
+    if sec is None:
+        return ""
+    h, rem = divmod(int(sec), 3600)
+    m, s = divmod(rem, 60)
+    return (f"{h}時間" if h else "") + (f"{m}分" if m or h else "") + f"{s}秒"
+
+
 def make_row(r, pts, good, bad):
     lv = r.get("level") or 0
     return {
@@ -169,7 +274,11 @@ def make_row(r, pts, good, bad):
         "サブスキル": " / ".join(
             (r.get(f"sub_skill{i + 1}") or "-") + ("" if r.get(f"sub_skill{i + 1}_unlocked") else "(未)")
             for i in range(5)),
-        "おてつだい時間(秒)": r.get("help_interval_sec"),
+        "おてつだい時間(画面・秒)": r.get("help_interval_sec"),
+        "おてつだい時間(計算後・秒)": help_time_after(r),
+        "おてつだい時間(計算後)": fmt_hms(help_time_after(r)),
+        "最大所持数(画面)": r.get("max_carry"),
+        "最大所持数(計算後)": carry_after(r),
         "食材": " / ".join(filter(None, [r.get("ingredient1"), r.get("ingredient2"), r.get("ingredient3")])),
         "新デザートの食材": ",".join(dessert_ingredients(r)), "Wiki候補": ",".join(wiki_match(r)),
         "良い点": ", ".join(good), "気になる点": ", ".join(bad),
@@ -216,7 +325,16 @@ def sel_future(r):
     return r.get("berry") in FAV_BERRIES
 
 
-MIN_STAR = 4    # ★3以下は載せない(今のレベルは見ない)
+MIN_STAR = 4    # ★3以下は載せない(今のレベルは見ない)。総合か、その目的に関係する角度のどれかが★4以上なら載せる
+
+# 目的ごとに、関係する角度(カードに出す・載せる条件に使う)
+PURPOSE_AXES = {
+    "dessert": ("食材", "おてつだい", "サポート"),
+    "berry": ("きのみ", "おてつだい", "サポート"),
+    "skill": ("スキル", "おてつだい", "サポート"),
+    "healer": ("スキル", "おてつだい", "サポート"),
+    "future": tuple(AXES),
+}
 
 PURPOSES = {
     # 目的: (名前, 選ぶ条件, 評価に使う「とくい」(None なら個体の本来の「とくい」を使う))
@@ -242,17 +360,53 @@ def build_purpose(recs, key, top=None, min_star=MIN_STAR):
             continue
         pts, good, bad = score(r, as_sp)
         row = make_row(r, pts, good, bad)
-        if row["★"] >= min_star:
-            rows.append(row)
+        ax = axis_all(r)
+        best = max([row["★"]] + [ax[k][1] for k in PURPOSE_AXES[key]])   # 総合か、関係する角度のどれかで一番高い月
+        if best < min_star:
+            continue
+        row["最高の月"] = best
+        for k, (p, m) in ax.items():
+            row[f"点:{k}"], row[f"月:{k}"] = round(p, 1), m
+        rows.append(row)
     rows.sort(key=sort_key, reverse=True)
+    # 順位(同点は総合の並びの順)。総合と、角度ごと
+    for i, row in enumerate(rows, 1):
+        row["順位:総合"] = i
+    for k in AXES:
+        for rank, row in enumerate(sorted(rows, key=lambda x: -x[f"点:{k}"]), 1):   # sorted は安定なので、同点は総合の順
+            row[f"順位:{k}"] = rank
     return rows[:top] if top else rows
 
 
-def show(rows, n):
+def build_all(recs):
+    """全個体を評価する(目的で絞らない)。HTML レポートの一覧用。
+
+    各行に、総合の点・月(★)、5つの角度の点・月、どの目的に当てはまるか(「目的」)、
+    全個体の中での順位(「順位:総合」「順位:角度名」)を付ける。総合は、その個体自身の「とくい」で評価する。
+    """
+    rows = []
+    for r in recs:
+        pts, good, bad = score(r)
+        row = make_row(r, pts, good, bad)
+        for k, (p, m) in axis_all(r).items():
+            row[f"点:{k}"], row[f"月:{k}"] = round(p, 1), m
+        row["目的"] = [k for k, v in PURPOSES.items() if v[1](r)]
+        rows.append(row)
+    ordered = sorted(rows, key=sort_key, reverse=True)
+    for i, row in enumerate(ordered, 1):
+        row["順位:総合"] = i
+    for k in AXES:
+        for rank, row in enumerate(sorted(ordered, key=lambda x: -x[f"点:{k}"]), 1):   # 同点は総合の順
+            row[f"順位:{k}"] = rank
+    return rows
+
+
+def show(rows, n, key=None):
     for i, r in enumerate(rows[:n], 1):
         name = r["種名"] or f"{r['系統']}系({r['ニックネーム']})"
+        angles = " ".join(f"{k}{r[f'月:{k}']}" for k in (PURPOSE_AXES[key] if key else AXES))
         print(f"{i:>2}. ★{r['★']} {r['点数']:>4}  {r['番号']} {name} Lv{r['Lv']} {r['タイプ']}/{r['とくい']} {r['せいかく']}"
-              f" | {r['メインスキル']} | {r['サブスキル']}"
+              f" | 角度:{angles} | {r['メインスキル']} | {r['サブスキル']}"
               + (f" | 食材:{r['新デザートの食材']}" if r["新デザートの食材"] else "")
               + (f" | Wiki:{r['Wiki候補']}" if r["Wiki候補"] else ""))
 
@@ -287,7 +441,7 @@ def main():
             w = csv.DictWriter(f, fieldnames=list(rows[0]))
             w.writeheader()
             w.writerows(rows)
-        show(rows, a.top)
+        show(rows, a.top, key)
         print(f"  -> {path}")
 
 

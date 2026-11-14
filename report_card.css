@@ -56,12 +56,24 @@ article.card:hover .shot{rotate:0deg}
 .tl li.hit .nm{background:linear-gradient(180deg,#0000 55%,#ffd86bd9 55%);padding:0 3px;font-weight:700}
 .tl li.off.hit .nm{background:linear-gradient(180deg,#0000 55%,#ffd86b66 55%);font-weight:500}
 
+/* 角度別の評価(おてつだい・食材・スキル・きのみ・サポート)。この目的に関係する角度は濃く、ほかは薄く */
+.ang{list-style:none;margin:6px 16px 4px;padding:8px 10px 6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:3px 14px;
+  border-top:1px dashed #2a243844;font-size:.76rem}
+.ang li{display:flex;align-items:center;gap:7px;opacity:.5}
+.ang li.rel{opacity:1}
+.ang .an{flex:0 0 4.6em;color:var(--ink2);white-space:nowrap}
+.ang li.rel .an{color:var(--ink);font-weight:700}
+.ang .rk{margin-left:auto;font-family:var(--num);font-style:italic;font-size:.72rem;color:var(--ink2)}
+.moons.sm{gap:2px}
+.moons.sm i{width:10px;height:10px}
+
 /* 気づき */
 .note{display:flex;flex-wrap:wrap;gap:6px;padding:6px 16px 12px}
 .note span{font-size:.72rem;padding:1px 9px;border-radius:3px;border:1px solid}
 .note .good{color:#1f7a66;border-color:#2f9e8688;background:#2f9e8614}
 .note .bad{color:var(--rose);border-color:#c4455f88;background:#c4455f12}
 .note .wiki{color:#8a5a00;border-color:#e0a82e;background:#ffd86b44}
+.note .purp{color:#4b3f7a;border-color:#4b3f7a66;background:#4b3f7a10}
 
 /* スキル部の画像(切手のように貼る) */
 .skillshot{display:block;width:calc(100% - 32px);margin:0 16px 16px;border:0;padding:6px;background:#fffdf6;cursor:zoom-in;

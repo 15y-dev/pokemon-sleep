@@ -1,0 +1,38 @@
+/* report_panel.css — 左のフィルターパネル(チェック・月の選択・数値)と、スマホ幅の切り替え。 */
+.panel{position:sticky;top:96px;max-height:calc(100vh - 112px);overflow:auto;padding:4px 10px 14px 0;scrollbar-width:thin;scrollbar-color:#2f3a7c transparent}
+.panel .sec{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.panel h3{font-family:var(--serif);font-size:1rem;margin:0 0 6px;color:var(--moonlit)}
+.hint{margin:0 0 8px;font-size:.74rem;color:#7f89c4;line-height:1.5}
+.moonsel{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sel{display:flex;flex-direction:column;gap:2px;font-size:.74rem;color:var(--dim)}
+.sel select,.num input{font:inherit;font-size:.84rem;color:var(--moonlit);background:#141b48;border:1px solid #2f3a7c;border-radius:6px;padding:4px 6px;width:100%}
+.num{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;font-size:.78rem;color:var(--dim);margin-bottom:8px}
+.num span{flex:1 0 100%}
+.num input{width:5.2em}
+.num em{font-style:normal;font-size:.74rem}
+
+details.grp{border-bottom:1px solid var(--line);padding:6px 0}
+details.grp summary{cursor:pointer;font-family:var(--serif);font-weight:500;font-size:.95rem;color:var(--moonlit);padding:3px 0;list-style:none;display:flex;align-items:center;gap:8px}
+details.grp summary::-webkit-details-marker{display:none}
+details.grp summary::before{content:"▸";color:var(--gold2);transition:.2s;font-size:.8rem}
+details.grp[open] summary::before{transform:rotate(90deg)}
+.cnt{margin-left:auto;font-family:var(--sans);font-size:.7rem;font-weight:500;color:#2a2438;background:var(--gold2);border-radius:999px;padding:0 8px}
+.cnt:empty{display:none}
+.opts{display:flex;flex-wrap:wrap;gap:5px;padding:6px 0 4px;max-height:240px;overflow:auto}
+.opt{display:inline-flex;align-items:center;gap:5px;font-size:.78rem;color:var(--lilac);cursor:pointer;padding:2px 9px;border:1px solid #2f3a7c;border-radius:999px;background:#ffffff08;transition:.15s;user-select:none;position:relative}
+.opt input{position:absolute;opacity:0;pointer-events:none}
+.opt i{font-style:normal;font-family:var(--num);font-size:.68rem;color:#7f89c4}
+.opt:hover{border-color:var(--gold2)}
+.opt:has(input:checked){background:var(--gold2);border-color:var(--gold2);color:#2a2438}
+.opt:has(input:checked) i{color:#6b5a1e}
+.opt:has(input:focus-visible){outline:2px solid var(--gold2);outline-offset:2px}
+.opt.one{margin:2px 4px 2px 0}
+
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;padding-top:12px}
+  #panelToggle{display:inline-block}
+  .panel{display:none;position:static;max-height:none;padding:0 0 10px}
+  body.panel-open .panel{display:block}
+  .hero .moon{display:none}
+  .bar{position:static}
+}
