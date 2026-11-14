@@ -300,9 +300,16 @@ def main():
         try:
             resp = call_vision(f.read_bytes(), auth, a.feature, langs, a.timeout, a.retries)
         except FatalError as e:
-            sys.exit(f"[{i}/{len(todo)}] {f.name}: {e}\n"
-                     "認証・設定のエラーとみられるため中断します。キーの権限と Cloud Vision API の有効化"
-                     "(サービスアカウントのプロジェクトで有効か)を確認してください。")
+            msg = str(e)
+            if "billing" in msg.lower():
+                hint = ("このプロジェクトは課金が有効になっていません。Cloud Vision API は、無料枠(月1000枚)の範囲でも"
+                        "課金アカウントの紐づけが必要です。エラーに出ている URL から有効にして、数分待ってから再実行してください。"
+                        "(認証自体は成功しています)")
+            elif "has not been used" in msg or "SERVICE_DISABLED" in msg:
+                hint = "Cloud Vision API がこのプロジェクトで有効になっていません。Google Cloud のコンソールで有効にしてください。"
+            else:
+                hint = "認証・設定のエラーとみられるため中断します。キーの権限と Cloud Vision API の有効化を確認してください。"
+            sys.exit(f"[{i}/{len(todo)}] {f.name}: {msg[:600]}\n\n{hint}")
         except RuntimeError as e:
             failed.append(f.name)
             print(f"[{i}/{len(todo)}] {f.name}: 失敗 - {e}")
