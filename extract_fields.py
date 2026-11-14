@@ -23,7 +23,8 @@ import json
 import re
 import sys
 import unicodedata
-from collections import Counter, namedtuple
+from collections import Counter, defaultdict, namedtuple
+from statistics import median
 from datetime import date, datetime
 from pathlib import Path
 
@@ -58,6 +59,12 @@ SUBSKILLS = ["おてつだいスピードS", "おてつだいスピードM", "�
 FIELDS = ["ワカクサ本島", "アンバー渓谷", "ラピスラズリ湖畔", "ゴールド旧発電所", "ウノハナ雪原", "シアンの砂浜", "トープ洞窟"]
 SPECIALTIES = ["きのみ", "食材", "スキル", "オール"]
 MAIN_SKILL_FIXES = {"パースト": "バースト"}  # OCR の典型的な誤読
+# メインスキルの基本名(カッコ付きの別名スキルは「別名(基本名)」の形。例: ものまね(スキルコピー))。629匹の実データから作成。
+MAIN_SKILLS = [
+    "エナジーチャージS", "エナジーチャージM", "食材ゲットS", "げんきチャージS", "ゆめのかけらゲットS", "料理パワーアップS",
+    "げんきオールS", "げんきエールS", "料理チャンスS", "きのみバースト", "ゆびをふる", "おてつだいサポートS",
+    "食材セレクトS", "きのみゾーン", "料理アシストS", "おてつだいブースト",
+]
 SLOT_CX = (390, 512, 628)   # 食材3枠の中心x(画面は幅720固定)
 SUB_SLOT_LV = (None, 25, 50, 70, 80)   # サブスキル5枠の解放レベル(1枠目は最初から解放)
 
@@ -337,7 +344,7 @@ def ex_middle(c, rec, H):
 
 
 DASH = re.compile(r"[-ー－−—–_.]+")   # 未設定の枠に出る「-」
-BADGE = re.compile(r"Lv\.?\d*|\.|\d{1,3}")   # 「Lv.25」や、「Lv」「.」「80」に割れたバッジの破片
+BADGE = re.compile(r"L[vu]\.?\d*|\.|\d{1,3}")   # 「Lv」が「Lu」に誤読されることがある(0359 の Lv.80 バッジ)   # 「Lv.25」や、「Lv」「.」「80」に割れたバッジの破片
 
 
 def ex_skills(c, rec, H, Y):
@@ -348,6 +355,21 @@ def ex_skills(c, rec, H, Y):
     name = squash(joined(t for t in row if cx(t) <= 560))
     for bad, good in MAIN_SKILL_FIXES.items():
         name = name.replace(bad, good)
+    # 末尾の「S」「M」が「5」「ー」などに誤読されることがある。「別名(基本名)」の形も含め、基本名を一覧と照合して直す
+    m_ = re.fullmatch(r"(.*?)(?:\((.+?)\))?", name)
+    if m_ and name:
+        outer, inner = m_.group(1), m_.group(2)
+        def fix(s):
+            if not s or s in MAIN_SKILLS:
+                return s
+            hit = difflib.get_close_matches(s, MAIN_SKILLS, n=1, cutoff=0.8)
+            return hit[0] if hit else s
+        new_inner = fix(inner) if inner else None
+        new_outer = fix(outer) if not inner else outer   # 別名つきのときは、外側は別名(固有名)なので直さない
+        fixed = f"{new_outer}({new_inner})" if inner else new_outer
+        if fixed != name:
+            c.flag("main_skill", name, f"一覧に一番近いもので補正: {fixed}", "low")
+            name = fixed
     rec["main_skill"] = name or None
     if not name:
         c.flag("main_skill", "", "メインスキル名が読めない", "high")
@@ -401,7 +423,7 @@ def ex_skills(c, rec, H, Y):
     slot_of = {(0, True): 1, (1, False): 2, (1, True): 3, (2, False): 4}
     locked = [False] * 5
     L0 = lines[0].yc if lines else None
-    for b in (t for t in c.sel(40, 700, H + 200, Y - 30) if re.fullmatch(r"Lv\.?\d*", t.t)):
+    for b in (t for t in c.sel(40, 700, H + 200, Y - 30) if re.fullmatch(r"L[vu]\.?\d*", t.t)):
         if L0 is None:
             break
         ri = round((cy(b) + 36 - L0) / 113)
@@ -656,6 +678,85 @@ def resolve_species(rec, names, c):
     rec["name_is_candy_species"] = (rec["species"] == fam) if rec["species"] and fam else None
 
 
+SPEED = "おてつだいスピード"
+SPEED_DOWN_FACTOR = 1.075   # せいかくで下がるときの倍率(実測。1.1 では揃わず、1.075 で最もよく揃った)
+UNLOCK_LV = (None, 25, 50, 70, 80)   # サブスキル5枠の解放レベル(画面の鍵バッジの表示どおり)
+
+
+def help_base(r):
+    """おてつだい時間から、レベル・せいかく・サブスキルの影響を除いた「基準値」。同じ種類なら揃うはず。"""
+    lv, sec = r.get("level"), r.get("help_interval_sec")
+    if not lv or not sec:
+        return None
+    f = 1 - 0.002 * (lv - 1)
+    if r.get("nature_up") == SPEED:
+        f *= 0.9
+    if r.get("nature_down") == SPEED:
+        f *= SPEED_DOWN_FACTOR
+    s = 0.0
+    for i in range(1, 6):
+        n = r.get(f"sub_skill{i}") or ""
+        if r.get(f"sub_skill{i}_unlocked") and n.startswith(SPEED):
+            s += 0.14 if n.endswith("M") else 0.07
+    return sec / (f * (1 - s))
+
+
+def consistency_check(recs, reviews, min_n=4, major=0.9):
+    """同じ種名のポケモンどうしで、決まっているはずの項目を突き合わせて、食い違いを要確認に出す。
+
+    多数派が9割以上(かつ4件以上)なのに外れているものだけを出す(姿の違いなどで割れる種類は出さない)。
+    """
+    def flag(r, field, value, reason):
+        reviews.append({"id": r["id"], "field": field, "value": value, "reason": reason, "severity": "mid"})
+
+    by_species = defaultdict(list)
+    for r in recs:
+        if r.get("species"):
+            by_species[r["species"]].append(r)
+    fields = (
+        ("specialty", "とくいなもの", lambda r: r.get("specialty")),
+        ("type", "タイプ", lambda r: r.get("type")),
+        ("main_skill", "メインスキル", lambda r: (r.get("main_skill") or "").replace(" ", "") or None),
+        ("ingredient1_count", "食材1の個数", lambda r: r.get("ingredient1_count")),
+    )
+    for sp, group in by_species.items():
+        for key, label, get in fields:
+            vals = [(r, get(r)) for r in group if get(r) is not None]
+            if len(vals) < min_n:
+                continue
+            top, cnt = Counter(v for _, v in vals).most_common(1)[0]
+            if cnt / len(vals) < major:
+                continue
+            for r, v in vals:
+                if v != top:
+                    flag(r, key, str(v), f"同じ{sp}の{cnt}/{len(vals)}件は「{top}」なのに、これだけ「{v}」({label}の誤読か、姿の違い)")
+
+    # おてつだい時間: 基準値が、同じ(種名, タイプ)の他の個体と1つも合わないものを出す
+    by_form = defaultdict(list)
+    for r in recs:
+        if r.get("species") and help_base(r) is not None:
+            by_form[(r["species"], r.get("type"))].append(r)
+    for (sp, _), group in by_form.items():
+        if len(group) < min_n:
+            continue
+        bases = [help_base(r) for r in group]
+        for r, b in zip(group, bases):
+            if sum(1 for x in bases if abs(x - b) <= 6) == 1:   # 自分以外に近い値が無い
+                flag(r, "help_interval_sec", f"{r['help_interval_sec']}秒(基準値{b:.0f})",
+                     f"同じ{sp}の他の個体(基準値の中央値 {median(bases):.0f}秒)と、おてつだい時間の基準値が合わない(時間・レベル・せいかく・サブスキルのどれかの誤読の疑い)")
+
+    # サブスキルの解放は、レベルで決まる(Lv25/50/70/80)
+    for r in recs:
+        lv = r.get("level")
+        if not lv:
+            continue
+        for i in range(2, 6):
+            got = r.get(f"sub_skill{i}_unlocked")
+            if got is not None and got != (lv >= UNLOCK_LV[i - 1]):
+                flag(r, f"sub_skill{i}_unlocked", f"Lv{lv}",
+                     f"サブスキル{i}は Lv{UNLOCK_LV[i - 1]} で解放されるはずが、{'解放済み' if got else '未解放'}と判定(鍵バッジの誤判定かレベルの誤読)")
+
+
 def merge_icons(recs, reviews, path):
     """extract_icons.py の結果(icons.json)があれば、性別・お気に入り・タイプを結合する。"""
     if not path.is_file():
@@ -737,6 +838,7 @@ def main():
         recs.append(rec)
         reviews += rev
     merge_icons(recs, reviews, Path(a.out_dir) / "icons.json")
+    consistency_check(recs, reviews)
 
     if a.ids:
         for rec, f in zip(recs, files):
