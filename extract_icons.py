@@ -51,6 +51,51 @@ _YY, _XX = np.mgrid[0:44, 0:44]
 CIRCLE = ((_YY - 22) ** 2 + (_XX - 22) ** 2) <= 16 ** 2
 
 
+ING_CX = (355, 473, 590)    # 食材3枠のアイコン中心x(画面は幅720固定)
+ING_REF_DIR = HERE / "data" / "icons"
+ING_NEAR = 14       # 基準画像との差(画素の平均絶対差)がこれ以内なら採用
+ING_MARGIN = 6      # 別の食材のうち2番目に近いものとの差が、これ以上あること
+
+
+def ing_crop(img, H, slot):
+    """食材アイコンを切り出す(slot=1〜3)。数量ラベル(x2 など)は塗りつぶして、判定に使わない。"""
+    iy = int(H - 332)
+    x = ING_CX[slot - 1]
+    p = img[iy - 42:iy + 42, x - 42:x + 42].copy()
+    if p.shape[:2] != (84, 84):
+        return None
+    p[58:, 36:] = 255
+    return p
+
+
+def load_ing_refs():
+    """data\\icons\\index.json に書かれた、食材の基準画像を読む。戻り値: [(食材名, 画像), ...]"""
+    idx = ING_REF_DIR / "index.json"
+    if not idx.is_file():
+        return []
+    refs = []
+    for e in json.loads(idx.read_text(encoding="utf-8"))["refs"]:
+        im = cv2.imread(str(ING_REF_DIR / e["file"]))
+        if im is not None:
+            refs.append((e["ja"], im.astype(np.float32)))
+    return refs
+
+
+def judge_ing(img, H, slot, refs):
+    """戻り値: (一番近い食材名, 距離, 別の食材のうち2番目に近いものとの差)。切り出せなければ (None, None, None)。"""
+    p = ing_crop(img, H, slot)
+    if p is None or not refs:
+        return None, None, None
+    p = p.astype(np.float32)
+    best = {}
+    for ja, ref in refs:
+        d = float(np.abs(p - ref).mean())
+        if ja not in best or d < best[ja]:
+            best[ja] = d
+    s = sorted((d, ja) for ja, d in best.items())
+    return s[0][1], s[0][0], (s[1][0] - s[0][0]) if len(s) > 1 else 99.0
+
+
 def header_x(c, key):
     """ヘッダーのラベル(タイプ・せいべつ・お気に入り)の中心 x。アイコンはその真下にある。"""
     for t in c.toks:
@@ -105,7 +150,7 @@ def judge_type(img, x):
     return ds[0][1], ds[0][0], ds[1][0] - ds[0][0]
 
 
-def extract_one(path, img_dir, today):
+def extract_one(path, img_dir, today, refs=()):
     n = path.stem
     toks, syms = ef.load_tokens(path)
     c = ef.Ctx(n, toks, syms, today)
@@ -140,6 +185,27 @@ def extract_one(path, img_dir, today):
             notes.append(("type", f"基準色から遠く判定できない(最も近い={name}, 距離{d:.0f})"))
         else:
             notes.append(("type", f"他のタイプと色が近く判別が不確か(最も近い={name}, 差{margin:.0f})"))
+
+    # 食材(3枠)。未解放の枠は薄く表示されるので、レベルで未解放と分かる枠は判定しない
+    _, H = ef.anchors(c)
+    if refs and H is not None:
+        tmp = {}
+        try:
+            ef.ex_top(c, tmp)
+        except Exception:
+            pass
+        lv = tmp.get("level")
+        for slot in (1, 2, 3):
+            if lv is not None and ((slot == 2 and lv < 30) or (slot == 3 and lv < 60)):
+                continue
+            name, d, margin = judge_ing(img, H, slot, refs)
+            key = f"ingredient{slot}"
+            if name is None:
+                notes.append((key, "食材アイコンが切り出せない"))
+            elif d <= ING_NEAR and margin >= ING_MARGIN:
+                rec[key] = name
+            else:
+                notes.append((key, f"食材アイコンを判定できない(最も近い={name}, 距離{d:.0f}, 差{margin:.0f})"))
     return rec, notes
 
 
@@ -161,9 +227,12 @@ def main():
     if not files:
         sys.exit(f"OCR 結果がありません: {a.ocr_dir}")
 
+    refs = load_ing_refs()
+    if not refs:
+        print("注意: data\\icons\\index.json が無いので、食材の判定は行いません")
     out, review = [], []
     for f in files:
-        rec, notes = extract_one(f, Path(a.img_dir), date.today())
+        rec, notes = extract_one(f, Path(a.img_dir), date.today(), refs)
         out.append(rec)
         review += [{"id": rec["id"], "field": k, "reason": r} for k, r in notes]
 
@@ -178,6 +247,8 @@ def main():
     print(f"性別: {dict(Counter(r.get('gender') for r in out))}")
     print(f"お気に入り: {dict(Counter(r.get('favorite') for r in out))}")
     print(f"タイプ: {dict(Counter(r.get('type') for r in out))}")
+    for s in (1, 2, 3):
+        print(f"食材{s}: {dict(Counter(r.get(f'ingredient{s}') for r in out).most_common(8))}")
     print(f"要確認: {len(review)} 件 {dict(Counter(r['field'] for r in review))}")
 
 

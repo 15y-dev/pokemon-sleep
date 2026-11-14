@@ -1,0 +1,138 @@
+{
+ "note": "食材アイコンの基準画像。629匹の撮影画像から、見た目でまとめて中央値を取ったもの。名前は公開データ(pokesleep-tool)の食材名との多数決と、目視確認で付けた",
+ "refs": [
+  {
+   "ing": "apple",
+   "ja": "とくせんリンゴ",
+   "file": "ing_apple_1.png",
+   "samples": 60,
+   "cluster": 0
+  },
+  {
+   "ing": "milk",
+   "ja": "モーモーミルク",
+   "file": "ing_milk_1.png",
+   "samples": 60,
+   "cluster": 1
+  },
+  {
+   "ing": "oil",
+   "ja": "ピュアなオイル",
+   "file": "ing_oil_1.png",
+   "samples": 54,
+   "cluster": 2
+  },
+  {
+   "ing": "sausage",
+   "ja": "マメミート",
+   "file": "ing_sausage_1.png",
+   "samples": 49,
+   "cluster": 3
+  },
+  {
+   "ing": "egg",
+   "ja": "とくせんエッグ",
+   "file": "ing_egg_1.png",
+   "samples": 49,
+   "cluster": 4
+  },
+  {
+   "ing": "soy",
+   "ja": "ワカクサ大豆",
+   "file": "ing_soy_1.png",
+   "samples": 49,
+   "cluster": 5
+  },
+  {
+   "ing": "honey",
+   "ja": "あまいミツ",
+   "file": "ing_honey_1.png",
+   "samples": 48,
+   "cluster": 6
+  },
+  {
+   "ing": "cacao",
+   "ja": "リラックスカカオ",
+   "file": "ing_cacao_1.png",
+   "samples": 48,
+   "cluster": 7
+  },
+  {
+   "ing": "herb",
+   "ja": "げきからハーブ",
+   "file": "ing_herb_1.png",
+   "samples": 44,
+   "cluster": 8
+  },
+  {
+   "ing": "tomato",
+   "ja": "あんみんトマト",
+   "file": "ing_tomato_1.png",
+   "samples": 41,
+   "cluster": 9
+  },
+  {
+   "ing": "ginger",
+   "ja": "あったかジンジャー",
+   "file": "ing_ginger_1.png",
+   "samples": 41,
+   "cluster": 10
+  },
+  {
+   "ing": "mushroom",
+   "ja": "あじわいキノコ",
+   "file": "ing_mushroom_1.png",
+   "samples": 31,
+   "cluster": 11
+  },
+  {
+   "ing": "corn",
+   "ja": "ワカクサコーン",
+   "file": "ing_corn_1.png",
+   "samples": 30,
+   "cluster": 12
+  },
+  {
+   "ing": "potato",
+   "ja": "ほっこりポテト",
+   "file": "ing_potato_1.png",
+   "samples": 24,
+   "cluster": 13
+  },
+  {
+   "ing": "pumpkin",
+   "ja": "ずっしりカボチャ",
+   "file": "ing_pumpkin_1.png",
+   "samples": 23,
+   "cluster": 14
+  },
+  {
+   "ing": "coffee",
+   "ja": "めざましコーヒー",
+   "file": "ing_coffee_1.png",
+   "samples": 8,
+   "cluster": 15
+  },
+  {
+   "ing": "avocado",
+   "ja": "つやつやアボカド",
+   "file": "ing_avocado_1.png",
+   "samples": 8,
+   "cluster": 16
+  },
+  {
+   "ing": "cacao",
+   "ja": "リラックスカカオ",
+   "file": "ing_cacao_2.png",
+   "samples": 5,
+   "cluster": 17
+  },
+  {
+   "ing": "leek",
+   "ja": "ふといながねぎ",
+   "file": "ing_leek_1.png",
+   "samples": 3,
+   "cluster": 19
+  }
+ ]
+}

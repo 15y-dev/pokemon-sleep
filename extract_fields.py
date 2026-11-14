@@ -399,7 +399,7 @@ def ex_skills(c, rec, H, Y):
     if len(cells) >= 3:
         order += [cells[2][0]]
     order += [""] * (5 - len(order))
-    names, empty_idx = [], []
+    names, empty_idx, ambiguous = [], [], {}
     for i, txt in enumerate(order[:5]):
         if DASH.fullmatch(txt):   # 未設定の枠は、名前の代わりに「-」が表示される
             names.append(None)
@@ -409,12 +409,30 @@ def ex_skills(c, rec, H, Y):
             names.append(None)
             empty_idx.append(i)
             continue
+        # 末尾の「S」「M」「L」だけが読めないことがある(例: 「おてつだいスピード」)。S と M のどちらか決められないので、
+        # 黙って S にはせず、後で「同じサブスキルは重複しない」ことを使って決める
+        pref = [n for n in SUBSKILLS if txt not in SUBSKILLS and len(txt) >= 4 and n.startswith(txt)]
+        if len(pref) >= 2:
+            names.append(None)
+            ambiguous[i] = (txt, pref)
+            continue
         best, st_ = closest(txt, SUBSKILLS, 0.75, loose=True)
         names.append(best)
         if st_ == "fixed":
             c.flag(f"sub_skill{i + 1}", txt, f"一覧に一番近いもので補正: {best}", "low")
         elif st_ == "unknown":
             c.flag(f"sub_skill{i + 1}", txt, "サブスキルの一覧に無い(新しい種類か誤読)", "mid")
+    # 末尾が読めなかった枠は、同じ記録にすでにあるサブスキルを除いて決める(1匹に同じサブスキルは付かない)
+    used = {n for n in names if n}
+    for i, (txt, pref) in ambiguous.items():
+        rest = [p for p in pref if p not in used]
+        if len(rest) == 1:
+            names[i] = rest[0]
+            used.add(rest[0])
+            c.flag(f"sub_skill{i + 1}", txt, f"末尾のS/M/Lが読めず、同じサブスキルは重複しないことから推定: {rest[0]}", "low")
+        else:
+            names[i] = txt + "?"
+            c.flag(f"sub_skill{i + 1}", txt, f"末尾のS/M/Lが読めず、候補を絞れない: {' / '.join(rest)}", "mid")
     # 解放済みか: 枠の上に鍵つきバッジ(「Lv.◯◯」)があれば未解放。
     # バッジの数字(25/50/70/80)は誤読されやすい(80→50など)ので、数字は見ずに「どの行のどちら側にあるか」で枠を決める。
     #   (行, 右列か) -> 枠: 1行目右=2枠目, 2行目左=3枠目, 2行目右=4枠目, 3行目左=5枠目
@@ -440,6 +458,9 @@ def ex_skills(c, rec, H, Y):
     for r in range(len(lines), 3):
         if not all(locked[s] for s in slots_of_row[r]):
             c.flag("sub_skills", str([ln.text for ln in lines]), f"サブスキルの{r + 1}行目が読めない(鍵バッジも無い)", "mid")
+    for n, k in Counter(n for n in names if n and not n.endswith("?")).items():
+        if k > 1:   # 1匹に同じサブスキルは付かない
+            c.flag("sub_skills", n, f"同じサブスキル「{n}」が{k}つある(あり得ないので、読み違いの疑い)", "mid")
     for i in range(5):
         rec[f"sub_skill{i + 1}"] = names[i]
         rec[f"sub_skill{i + 1}_unlocked"] = not locked[i]
@@ -583,15 +604,16 @@ def ex_sleep(c, rec, Y):
 
 COLUMNS = [
     "id", "level", "species", "nickname", "name_text", "candy_species", "name_is_candy_species",
-    "type", "gender", "favorite", "sp", "exp_to_next", "candy_count",
+    "type", "berry", "gender", "favorite", "sp", "exp_to_next", "candy_count",
     "mood_percent", "status_note", "specialty", "ribbon_present", "has_evolve_button",
-    "berry_count", "ingredient1_count", "ingredient2_count", "ingredient3_count",
+    "berry_count", "ingredient1", "ingredient1_count", "ingredient2", "ingredient2_count",
+    "ingredient3", "ingredient3_count",
     "ingredient2_locked", "ingredient3_locked", "help_interval_sec", "help_interval_text", "max_carry",
     "main_skill", "main_skill_level", "main_skill_desc",
     "sub_skill1", "sub_skill2", "sub_skill3", "sub_skill4", "sub_skill5",
     "sub_skill1_unlocked", "sub_skill2_unlocked", "sub_skill3_unlocked", "sub_skill4_unlocked", "sub_skill5_unlocked",
     "nature", "nature_up", "nature_down", "nature_neutral", "nature_text",
-    "met_date", "field", "field_ex", "sleep_minutes", "sleep_text",
+    "met_date", "field", "field_ex", "sleep_minutes", "sleep_text", "form_text", "note",
 ]
 
 
@@ -603,6 +625,7 @@ HEADERS_JA = {
     "sp": "SP", "exp_to_next": "次のレベルまでのEXP",
     "candy_count": "アメの個数", "mood_percent": "機嫌(%)", "status_note": "状態バッジ",
     "specialty": "とくいなもの", "ribbon_present": "リボンあり", "has_evolve_button": "進化ボタンあり",
+    "berry": "きのみ", "ingredient1": "食材1", "ingredient2": "食材2", "ingredient3": "食材3",
     "berry_count": "きのみの個数", "ingredient1_count": "食材1の個数", "ingredient2_count": "食材2の個数",
     "ingredient3_count": "食材3の個数", "ingredient2_locked": "食材2は未解放", "ingredient3_locked": "食材3は未解放",
     "help_interval_sec": "おてつだい時間(秒)", "help_interval_text": "おてつだい時間(表示)",
@@ -617,6 +640,7 @@ HEADERS_JA = {
     "nature_neutral": "せいかくによる特徴なし", "nature_text": "せいかく(OCR生の文字)",
     "met_date": "出会った日", "field": "出会ったフィールド", "field_ex": "EXフィールド",
     "sleep_minutes": "一緒に眠った時間(分)", "sleep_text": "一緒に眠った時間(表示)",
+    "form_text": "姿(バケッチャなど)", "note": "備考",
 }
 REVIEW_HEADERS_JA = {"severity": "重要度", "id": "番号", "field": "項目", "value": "読み取った値", "reason": "理由"}
 SEVERITY_JA = {"high": "高(要修正)", "mid": "中(要確認)", "low": "低(補正済み・参考)"}
@@ -696,6 +720,8 @@ def help_base(r):
     s = 0.0
     for i in range(1, 6):
         n = r.get(f"sub_skill{i}") or ""
+        if r.get(f"sub_skill{i}_unlocked") and n.startswith(SPEED) and n.endswith("?"):
+            return None   # S か M か分からないので、基準値は出せない
         if r.get(f"sub_skill{i}_unlocked") and n.startswith(SPEED):
             s += 0.14 if n.endswith("M") else 0.07
     return sec / (f * (1 - s))
@@ -735,8 +761,9 @@ def consistency_check(recs, reviews, min_n=4, major=0.9):
     by_form = defaultdict(list)
     for r in recs:
         if r.get("species") and help_base(r) is not None:
-            by_form[(r["species"], r.get("type"))].append(r)
-    for (sp, _), group in by_form.items():
+            # 姿(バケッチャのこだましゅ・ちゅうだましゅなど)で、おてつだい時間の基準が違うので、姿ごとに比べる
+            by_form[(r["species"], r.get("type"), r.get("form_text"))].append(r)
+    for (sp, _, _), group in by_form.items():
         if len(group) < min_n:
             continue
         bases = [help_base(r) for r in group]
@@ -757,6 +784,50 @@ def consistency_check(recs, reviews, min_n=4, major=0.9):
                      f"サブスキル{i}は Lv{UNLOCK_LV[i - 1]} で解放されるはずが、{'解放済み' if got else '未解放'}と判定(鍵バッジの誤判定かレベルの誤読)")
 
 
+def apply_corrections(recs, reviews, path):
+    """corrections.json(目で見て確認した値)を、機械の読み取りより優先して反映する。
+
+    - 書かれた項目だけを上書きする。上書きした項目に関する要確認は、確認済みとして消す。
+    - 「_note」は備考として残す。
+    """
+    if not path.is_file():
+        return 0
+    data = json.loads(path.read_text(encoding="utf-8"))
+    by_id = {r["id"]: r for r in recs}
+    done = 0
+    for id_, fixes in data.items():
+        if id_.startswith("_") or id_ not in by_id:
+            continue
+        rec = by_id[id_]
+        touched = set()
+        for k, v in fixes.items():
+            if k == "_note":
+                rec["note"] = v
+                continue
+            rec[k] = v
+            touched.add(k)
+        # 名前を手で決めたときの付随項目
+        if "species" in fixes and rec.get("candy_species"):
+            rec["name_is_candy_species"] = rec["species"] == rec["candy_species"]
+        # 上書きした項目に関する要確認は、確認済みなので消す(関連する項目名もまとめて)
+        related = set(touched)
+        if touched & {"species", "nickname"}:
+            related |= {"species", "candy_species"}
+        if touched & {"nature", "nature_up", "nature_down", "nature_neutral"}:
+            related |= {"nature"}
+        if any(k.startswith("sub_skill") for k in touched):
+            related |= {"sub_skills", "sub_skill1", "sub_skill2", "sub_skill3", "sub_skill4", "sub_skill5"}
+        if touched & {"ingredient1_count", "ingredient2_count", "ingredient3_count"}:
+            related |= {"ingredient_counts"}
+        if touched & {"ingredient1", "ingredient2", "ingredient3"}:
+            related |= {"ingredient1", "ingredient2", "ingredient3"}
+        if "help_interval_sec" in touched:
+            related |= {"help_interval"}
+        reviews[:] = [r for r in reviews if not (r["id"] == id_ and r["field"] in related)]
+        done += 1
+    return done
+
+
 def merge_icons(recs, reviews, path):
     """extract_icons.py の結果(icons.json)があれば、性別・お気に入り・タイプを結合する。"""
     if not path.is_file():
@@ -768,9 +839,27 @@ def merge_icons(recs, reviews, path):
         rec["gender"] = ic.get("gender")
         rec["favorite"] = ic.get("favorite")
         rec["type"] = ic.get("type")
+        for s in (1, 2, 3):
+            rec[f"ingredient{s}"] = ic.get(f"ingredient{s}")
     for n in data.get("review", []):
         sev = "low" if "採用" in n["reason"] else "mid"
         reviews.append({"id": n["id"], "field": n["field"], "value": "", "reason": n["reason"], "severity": sev})
+
+
+# タイプとあわせて決まるきのみ(ポケモンスリープ攻略・検証 Wiki の「きのみ」の一覧表より。
+# 画面のきのみのアイコンの見た目と、タイプが、629匹の実データで100%対応することも確認した)
+BERRY_OF_TYPE = {
+    "ノーマル": "キーのみ", "ほのお": "ヒメリのみ", "みず": "オレンのみ", "でんき": "ウブのみ", "くさ": "ドリのみ",
+    "こおり": "チーゴのみ", "かくとう": "クラボのみ", "どく": "カゴのみ", "じめん": "フィラのみ", "ひこう": "シーヤのみ",
+    "エスパー": "マゴのみ", "むし": "ラムのみ", "いわ": "オボンのみ", "ゴースト": "ブリーのみ", "ドラゴン": "ヤチェのみ",
+    "あく": "ウイのみ", "はがね": "ベリブのみ", "フェアリー": "モモンのみ",
+}
+
+
+def add_berry(recs):
+    """タイプからきのみを決める(きのみはタイプと1対1で対応する)。"""
+    for rec in recs:
+        rec["berry"] = BERRY_OF_TYPE.get(rec.get("type"))
 
 
 def extract_one(path, today, names=None):
@@ -838,7 +927,18 @@ def main():
         recs.append(rec)
         reviews += rev
     merge_icons(recs, reviews, Path(a.out_dir) / "icons.json")
+    # 手修正を先に反映してから整合性チェックをする(確認済みの値を、他の個体の検証にも使えるようにする)
+    n_fix = apply_corrections(recs, reviews, HERE / "corrections.json")
+    add_berry(recs)   # タイプが手修正で決まった個体も含めて、あとから決める
     consistency_check(recs, reviews)
+    # 手修正した個体は、整合性チェックの結果も確認済みなので、手で書いた項目に関するものは消す
+    fixed_fields = {}
+    if n_fix:
+        data = json.loads((HERE / "corrections.json").read_text(encoding="utf-8"))
+        fixed_fields = {k: {f for f in v if not f.startswith("_")} for k, v in data.items() if not k.startswith("_")}
+        reviews[:] = [r for r in reviews if not (r["field"] in fixed_fields.get(r["id"], ()) and r["severity"] != "high")]
+        if n_fix:
+            print(f"手修正(corrections.json)を {n_fix} 件反映しました")
 
     if a.ids:
         for rec, f in zip(recs, files):
