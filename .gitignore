@@ -18,3 +18,4 @@ __pycache__/
 # 抽出結果(OCR から再生成できる。pokemon.json はルート直下の *.json として上で除外済み)
 /pokemon.csv
 /review.csv
+/shortlists/
