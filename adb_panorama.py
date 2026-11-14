@@ -129,14 +129,37 @@ def diff_ratio(a, b, tol=40):
     return float((d > tol).mean())
 
 
+def is_popup(img):
+    """「おやすみリボン」などの青いお知らせポップアップが出ているか。
+
+    ポップアップ中は画面中央に青い帯が左端まで伸びる。通常画面の左端は白かった緑の帯で、青くならない。
+    """
+    H = img.shape[0]
+    b, g, r = img[int(H * 0.45):int(H * 0.56), 2:14].reshape(-1, 3).mean(axis=0)
+    return bool(b > 220 and r < 90 and 140 < g < 225)
+
+
+def dismiss_popups(w, h, img=None, max_tries=5):
+    """ポップアップが出ていれば OK を押して閉じる。閉じた後の最新画面を返す。"""
+    img = capture() if img is None else img
+    for _ in range(max_tries):
+        if not is_popup(img):
+            return img
+        print("\nポップアップを閉じます")
+        adb("shell", "input", "tap", str(w // 2), str(int(h * 0.66)))
+        time.sleep(1.5)
+        img = capture()
+    return img
+
+
 def scroll_to_top(w, h, a, max_tries=20):
     """画面が動かなくなるまで下方向へフリックして、一番上まで戻す。最後の画面を返す。"""
-    prev = capture()
+    prev = dismiss_popups(w, h)
     y0, y1 = int(h * 0.4), int(h * 0.85)  # アニメーションするスプライトや固定バーを避けた領域
     for _ in range(max_tries):
         swipe(w, h, -0.6, a.top_duration)
         time.sleep(a.wait)
-        cur = capture()
+        cur = dismiss_popups(w, h, capture())
         if np.abs(prev[y0:y1].astype(np.int16) - cur[y0:y1].astype(np.int16)).mean() < 0.5:
             return cur
         prev = cur
