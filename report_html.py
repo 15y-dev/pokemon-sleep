@@ -7,7 +7,7 @@ report_html.py
 使い方:
     python report_html.py                      # すべての目的
     python report_html.py --purpose dessert    # 1つだけ
-    python report_html.py --now                # 今の強さ重視(解放済みの枠だけで評価)
+    python report_html.py --min-star 3         # ★3も載せる(既定は★4以上)
     python report_html.py --top 30             # 目的ごとの最大件数(既定は全件)
 
 各カードには、画像2枚(上部=名前・SP・特技、スキル部=メインスキル・サブスキル)が付く。
@@ -95,10 +95,7 @@ function apply(){
   let shown=0;
   $$('.grid').forEach(g=>{
     const cards=$$('.card',g);
-    cards.sort((a,b)=>key==='pts'?(+a.dataset.i-+b.dataset.i)
-      :key==='lv'?(+b.dataset.lv-+a.dataset.lv)||(+a.dataset.i-+b.dataset.i)
-      :key==='lvasc'?(+a.dataset.lv-+b.dataset.lv)||(+a.dataset.i-+b.dataset.i)
-      :(a.dataset.no.localeCompare(b.dataset.no)));
+    cards.sort((a,b)=>key==='pts'?(+a.dataset.i-+b.dataset.i):(a.dataset.no.localeCompare(b.dataset.no)));
     cards.forEach(c=>{g.appendChild(c);
       const ok=+c.dataset.star>=ms&&words.every(w=>c.dataset.text.includes(w));
       c.hidden=!ok;if(ok)shown++;});
@@ -132,7 +129,7 @@ PURPOSE_HOW = {
     "berry": "きのみとくいで、アンバー渓谷の好物(カゴ・ラム・ヤチェ = どく・むし・ドラゴン)のきのみを集める個体。",
     "skill": "スキルとくいで、料理パワーアップS・料理チャンスS・料理アシストS を持つ個体。",
     "healer": "げんきオールS・げんきエールS(チーム全員を回復する)を持つ個体。サブスキルは、スキルの発動に関わるものを評価します。",
-    "future": "アンバー渓谷の好物のきのみで、Lv40未満の★3以上。これから育てる価値がある個体。",
+    "future": "アンバー渓谷の好物のきのみ(どく・むし・ドラゴン)で、とくいを問わず、サブスキルとせいかくが良い個体。",
 }
 
 
@@ -220,7 +217,7 @@ def cached_images(id_):
     return _img_cache[id_]
 
 
-def section_html(key, recs_by_id, rows, future, top, delay0=0):
+def section_html(key, recs_by_id, rows, top):
     title = sl.PURPOSES[key][0]
     as_sp = sl.PURPOSES[key][2]
     shown = rows[:top] if top else rows
@@ -235,12 +232,12 @@ def section_html(key, recs_by_id, rows, future, top, delay0=0):
             f'<p class="how">{E(PURPOSE_HOW.get(key, ""))}</p>{body}</section>')
 
 
-def build(recs, keys, future, top):
+def build(recs, keys, min_star, top):
     recs_by_id = {r["id"]: r for r in recs}
-    built = [(k, sl.build_purpose(recs, k, future=future)) for k in keys]
+    built = [(k, sl.build_purpose(recs, k, min_star=min_star)) for k in keys]
     nav = "".join(f'<a href="#{k}">{E(sl.PURPOSES[k][0].split("(")[0])}<b>{len(rows[:top] if top else rows)}</b></a>'
                   for k, rows in built)
-    sections = "".join(section_html(k, recs_by_id, rows, future, top) for k, rows in built)
+    sections = "".join(section_html(k, recs_by_id, rows, top) for k, rows in built)
     used = []
     for _, rows in built:
         for row in (rows[:top] if top else rows):
@@ -248,7 +245,8 @@ def build(recs, keys, future, top):
                 used.append(row["番号"])
     store = "".join(f'<div id="f{i}" data-src="{cached_images(i)[2]}" hidden></div>'
                     for i in used if cached_images(i)[2])
-    mode = "今の強さ重視(解放済みの枠だけで評価)" if not future else "将来性重視(未解放の枠も、×0.6で数える)"
+    star_options = "".join(f'<option value="{k}">{k}つ以上</option>' for k in range(min_star, 5)) + '<option value="5">5つ</option>'
+    mode = f"今のレベルは見ません(未解放のサブスキルも同じ重さで数えます)。★{min_star}以上だけを載せています"
     return f"""<!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -262,10 +260,8 @@ def build(recs, keys, future, top):
 <div class="bar"><nav class="tabs">{nav}</nav>
 <div class="ctl">
 <input id="q" type="search" placeholder="名前・タイプ・スキルで検索" aria-label="検索">
-<label>月 <select id="star" aria-label="ランクの下限"><option value="1">すべて</option><option value="2">2つ以上</option>
-<option value="3">3つ以上</option><option value="4">4つ以上</option><option value="5">5つ</option></select></label>
-<label>並び <select id="sort" aria-label="並べ替え"><option value="pts">点数が高い順</option><option value="lv">Lvが高い順</option>
-<option value="lvasc">Lvが低い順</option><option value="no">番号順</option></select></label>
+<label>月 <select id="star" aria-label="ランクの下限">{star_options}</select></label>
+<label>並び <select id="sort" aria-label="並べ替え"><option value="pts">点数が高い順</option><option value="no">番号順</option></select></label>
 <label class="chk"><input id="skillimg" type="checkbox" checked>スキル画像</label>
 <span><span id="shown">0</span>枚</span></div></div>
 <main>{sections}</main>
@@ -283,7 +279,7 @@ def main():
     ap.add_argument("--out", default=str(HERE / "report.html"))
     ap.add_argument("--purpose", default="all", help="目的(カンマ区切り): " + " / ".join(sl.PURPOSES) + " / all")
     ap.add_argument("--top", type=int, default=0, help="目的ごとの最大件数(0 なら全件)")
-    ap.add_argument("--now", action="store_true", help="今の強さ重視(解放済みの枠だけで評価)")
+    ap.add_argument("--min-star", type=int, default=sl.MIN_STAR, help=f"載せる★の下限(既定 {sl.MIN_STAR})")
     a = ap.parse_args()
 
     recs = json.loads(Path(a.json).read_text(encoding="utf-8"))
@@ -292,7 +288,7 @@ def main():
     if bad:
         sys.exit(f"知らない目的です: {bad}(使えるもの: {', '.join(sl.PURPOSES)})")
     out = Path(a.out)
-    out.write_text(build(recs, keys, not a.now, a.top), encoding="utf-8")
+    out.write_text(build(recs, keys, a.min_star, a.top), encoding="utf-8")
     print(f"{out}  ({out.stat().st_size / 1e6:.1f} MB)")
 
 

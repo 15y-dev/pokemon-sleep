@@ -7,8 +7,11 @@ shortlist.py
     dessert  デザート・ドリンク用の食材集め(食材とくいで、新デザートの食材を持つ)
     berry    好物のきのみ集め(きのみとくいで、アンバー渓谷の好物 = カゴ・ラム・ヤチェ)
     skill    料理スキル(料理パワーアップS・料理チャンスS・料理アシストS)
-    healer   ヒーラー(げんきオールS・げんきエールS・げんきチャージS)
-    future   さらに育てる価値がある個体(アンバー渓谷の好物のきのみで、Lv40未満)
+    healer   ヒーラー(げんきオールS・げんきエールS)
+    future   アンバー渓谷で育てる個体(好物のきのみ = どく・むし・ドラゴン。とくいは問わない)
+
+今のレベルは、選ぶ条件にも点数にも使わない(未解放のサブスキル・食材の枠も、解放済みと同じ扱い)。
+★3以下は載せない(★4以上だけ。--min-star で変えられる)。
 
 出力(shortlists フォルダ。Excel で開ける UTF-8 BOM つき):
     dessert.csv / berry.csv / skill.csv / healer.csv / future.csv
@@ -17,7 +20,7 @@ shortlist.py
     python shortlist.py                       # すべての目的
     python shortlist.py --purpose dessert     # 1つだけ
     python shortlist.py --purpose berry,skill --top 15
-    python shortlist.py --now                 # 今の強さ重視(解放済みの枠だけで評価)
+    python shortlist.py --min-star 3          # ★3も載せる
 
 ランクの付け方は、下の定数にまとめてある(Wiki の記述を根拠にした目安。好みに合わせて変えてよい)。
 """
@@ -90,11 +93,9 @@ def sub_table(specialty):
     return t
 
 
-def score(rec, future=True, as_specialty=None):
-    """戻り値: (点数, 良い点のメモ, 気になる点のメモ)。
+def score(rec, as_specialty=None):
+    """戻り値: (点数, 良い点のメモ, 気になる点のメモ)。今のレベルは見ない(未解放の枠も同じ重さで数える)。
 
-    future=True : 未解放の枠も、割り引いて(×0.6)数える(将来性)
-    future=False: 解放済みの枠だけを数える(今の強さ)
     as_specialty: 評価に使う「とくい」。None なら、その個体の本来の「とくい」を使う。
                   (ヒーラーは、とくいが何であれ、スキル発動が大事なので「スキル」で評価する)
     """
@@ -106,19 +107,13 @@ def score(rec, future=True, as_specialty=None):
         name = rec.get(f"sub_skill{i + 1}")
         if not name:
             continue
-        unlocked = rec.get(f"sub_skill{i + 1}_unlocked")
         v = table.get(name, 0)
         if v == 0 or name in seen:
             continue
         seen.add(name)
-        w = SLOT_WEIGHT[i]
-        if unlocked:
-            pts += v * w
-            good_notes.append(name)
-        elif future:
-            # まだ解放されていない枠。レベルが上がれば効く(割り引いて数える)
-            pts += v * w * 0.6
-            good_notes.append(f"{name}(Lv{UNLOCK_LV[i]}で解放)")
+        # 今のレベルは見ない。未解放の枠も、解放済みと同じ重さで数える(育てれば必ず解放されるため)
+        pts += v * SLOT_WEIGHT[i]
+        good_notes.append(name)
     good, bad = wanted_effects(sp)
     up, down = rec.get("nature_up"), rec.get("nature_down")
     if up in good:
@@ -158,13 +153,11 @@ def wiki_match(rec):
 
 
 def dessert_ingredients(rec):
-    """解放済みの食材のうち、新デザート・ドリンクで使うもの。"""
-    lv = rec.get("level") or 0
-    out = []
-    for s, th in ((1, 0), (2, 30), (3, 60)):
-        if lv >= th and rec.get(f"ingredient{s}") in NEW_DESSERT_INGREDIENTS:
-            out.append(rec[f"ingredient{s}"])
-    return out
+    """画面に出ている食材(食材1〜3)のうち、新デザート・ドリンクで使うもの。今のレベルは見ない。
+
+    注意: Lv30未満は食材2、Lv60未満は食材3が画面に出ないので、読み取れていない(判定できない)。
+    """
+    return [rec[f"ingredient{s}"] for s in (1, 2, 3) if rec.get(f"ingredient{s}") in NEW_DESSERT_INGREDIENTS]
 
 def make_row(r, pts, good, bad):
     lv = r.get("level") or 0
@@ -177,8 +170,7 @@ def make_row(r, pts, good, bad):
             (r.get(f"sub_skill{i + 1}") or "-") + ("" if r.get(f"sub_skill{i + 1}_unlocked") else "(未)")
             for i in range(5)),
         "おてつだい時間(秒)": r.get("help_interval_sec"),
-        "食材": " / ".join(filter(None, [r.get("ingredient1"), r.get("ingredient2") if lv >= 30 else None,
-                                          r.get("ingredient3") if lv >= 60 else None])),
+        "食材": " / ".join(filter(None, [r.get("ingredient1"), r.get("ingredient2"), r.get("ingredient3")])),
         "新デザートの食材": ",".join(dessert_ingredients(r)), "Wiki候補": ",".join(wiki_match(r)),
         "良い点": ", ".join(good), "気になる点": ", ".join(bad),
     }
@@ -220,32 +212,35 @@ def sel_healer(r):
 
 
 def sel_future(r):
-    """さらに育てる価値がある個体: 好物のきのみ(アンバー渓谷)で、Lv40未満。★3以上(点数が高い)だけ残す。"""
-    return r.get("berry") in FAV_BERRIES and (r.get("level") or 0) < 40
+    """アンバー渓谷の好物のきのみ(どく・むし・ドラゴン)で、とくいを問わず、サブスキルとせいかくが良い個体。"""
+    return r.get("berry") in FAV_BERRIES
 
+
+MIN_STAR = 4    # ★3以下は載せない(今のレベルは見ない)
 
 PURPOSES = {
-    # 目的: (名前, 選ぶ条件, 評価に使う「とくい」(None なら個体の本来の「とくい」を使う), 最低★)
-    "dessert": ("デザート・ドリンク用の食材集め", sel_dessert, "食材", 1),
-    "berry": ("好物のきのみ集め(アンバー渓谷)", sel_berry, "きのみ", 1),
-    "skill": ("料理スキル(料理パワーアップ・チャンス・アシスト)", sel_skill, "スキル", 1),
-    "healer": ("ヒーラー(げんきオール・エール)", sel_healer, "スキル", 1),
-    "future": ("さらに育てる価値がある個体(アンバー渓谷・Lv40未満・★3以上)", sel_future, None, 3),
+    # 目的: (名前, 選ぶ条件, 評価に使う「とくい」(None なら個体の本来の「とくい」を使う))
+    "dessert": ("デザート・ドリンク用の食材集め", sel_dessert, "食材"),
+    "berry": ("好物のきのみ集め(アンバー渓谷)", sel_berry, "きのみ"),
+    "skill": ("料理スキル(料理パワーアップ・チャンス・アシスト)", sel_skill, "スキル"),
+    "healer": ("ヒーラー(げんきオール・エール)", sel_healer, "スキル"),
+    "future": ("アンバー渓谷で育てる個体(好物のきのみ・とくい不問)", sel_future, None),
 }
 
 
 def sort_key(x):
-    return (x["点数"], bool(x["新デザートの食材"]), bool(x["Wiki候補"]), x["Lv"] or 0)
+    # 点数が同じなら、新デザートの食材・Wiki候補を先に。今のレベルは並びに使わない(番号の順にする)
+    return (x["点数"], bool(x["新デザートの食材"]), bool(x["Wiki候補"]), [-ord(c) for c in x["番号"]])
 
 
-def build_purpose(recs, key, future=True, top=None):
-    """目的 key の個体を選んで、点数順に並べて返す。"""
-    title, sel, as_sp, min_star = PURPOSES[key]
+def build_purpose(recs, key, top=None, min_star=MIN_STAR):
+    """目的 key の個体を選んで、点数順に並べて返す。今のレベルは見ない。★が min_star 未満のものは載せない。"""
+    title, sel, as_sp = PURPOSES[key]
     rows = []
     for r in recs:
         if not sel(r):
             continue
-        pts, good, bad = score(r, future, as_sp)
+        pts, good, bad = score(r, as_sp)
         row = make_row(r, pts, good, bad)
         if row["★"] >= min_star:
             rows.append(row)
@@ -269,7 +264,7 @@ def main():
     ap.add_argument("--purpose", default="all",
                     help="目的(カンマ区切り): " + " / ".join(PURPOSES) + " / all(すべて)")
     ap.add_argument("--top", type=int, default=10, help="画面に出す件数(目的ごと)")
-    ap.add_argument("--now", action="store_true", help="今の強さ重視(解放済みの枠だけで評価する)。既定は将来性重視")
+    ap.add_argument("--min-star", type=int, default=MIN_STAR, help=f"載せる★の下限(既定 {MIN_STAR})")
     a = ap.parse_args()
 
     recs = json.loads(Path(a.json).read_text(encoding="utf-8"))
@@ -282,7 +277,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     for key in keys:
         title = PURPOSES[key][0]
-        rows = build_purpose(recs, key, future=not a.now)
+        rows = build_purpose(recs, key, min_star=a.min_star)
         print(f"\n=== {title}  ({len(rows)}匹) ===")
         if not rows:
             print("  条件に合う個体がありません")
