@@ -37,9 +37,28 @@ import numpy as np
 ADB = "adb"
 
 
+SERIAL = None  # ワイヤレス接続の端末(例: 192.168.0.6:5555)。接続が切れたときの再接続に使う
+RETRIES = 60   # adb が失敗したときのリトライ回数(5秒間隔)
+
+
+def reconnect():
+    if SERIAL and ":" in SERIAL:
+        subprocess.run([ADB, "connect", SERIAL], capture_output=True)
+
+
 def adb(*args, binary=False):
-    out = subprocess.run([ADB, *args], capture_output=True, check=True).stdout
-    return out if binary else out.decode()
+    for attempt in range(RETRIES + 1):
+        try:
+            cmd = [ADB, *(["-s", SERIAL] if SERIAL else []), *args]
+            out = subprocess.run(cmd, capture_output=True, check=True).stdout
+            return out if binary else out.decode()
+        except subprocess.CalledProcessError as e:
+            if attempt >= RETRIES:
+                raise
+            err = (e.stderr or b"").decode(errors="replace").strip()
+            print(f"\n⚠ adb が失敗しました({err or e.returncode})。再接続して再試行します [{attempt + 1}/{RETRIES}]")
+            time.sleep(5)
+            reconnect()
 
 
 def capture():
@@ -180,7 +199,7 @@ def shoot(w, h, a, first, fixed_tb):
 
 
 def main():
-    global ADB
+    global ADB, SERIAL
     ap = argparse.ArgumentParser()
     ap.add_argument("--swipe", type=float, default=0.4, help="1回のスワイプ距離(画面高さ比)")
     ap.add_argument("--duration", type=int, default=1000, help="スワイプ時間ms(長いほど慣性が出にくい)")
@@ -204,9 +223,22 @@ def main():
     ap.add_argument("--top-duration", type=int, default=200, help="一番上へ戻すフリックの時間ms")
     ap.add_argument("--same-thresh", type=float, default=0.003,
                     help="前のポケモンとの変化率がこれ未満なら切り替わっていないとみなす")
+    ap.add_argument("--start", type=int, default=1,
+                    help="N匹目から撮影を始める。N匹目の画面を表示した状態で実行する(それ以前は横スワイプで送らない)")
+    ap.add_argument("--serial", help="使う端末のシリアル(adb devices の1列目)。省略で自動選択(USB優先)")
     ap.add_argument("--adb", default="adb", help="adb の実行ファイルのパス")
     a = ap.parse_args()
     ADB = a.adb
+
+    # 使う端末を決める。複数台(USBとワイヤレスの二重認識など)のときは USB を優先する
+    if a.serial:
+        SERIAL = a.serial
+    else:
+        found = [l.split()[0] for l in adb("devices").splitlines()[1:]
+                 if len(l.split()) >= 2 and l.split()[1] == "device"]
+        found.sort(key=lambda s: ":" in s)  # ":" を含まない(USB)ものを先頭に
+        SERIAL = found[0] if found else None
+    print(f"使用する端末: {SERIAL}")
 
     w, h = screen_size()
     print(f"画面サイズ: {w}x{h}")
@@ -218,10 +250,10 @@ def main():
     started = time.time()
     done = 0
 
-    for i in range(1, a.count + 1):
+    for i in range(a.start, a.count + 1):
         path = a.out if a.count == 1 else os.path.join(a.out_dir, f"{i:04d}.png")
 
-        if i > 1:
+        if i > a.start:
             hswipe(w, h, a.direction, a.hswipe_y, a.hswipe_duration)
             time.sleep(a.switch_wait)
 
