@@ -1,0 +1,14 @@
+# 秘密情報: Google サービスアカウントのキー(JSON)。絶対にコミットしない
+# ocr\ の結果JSONは別フォルダなので対象外。ルート直下の JSON だけを除外する
+/*.json
+
+# 仮想環境・キャッシュ
+.venv/
+__pycache__/
+
+# 撮影・OCRの成果物とログ
+/panoramas/
+/panoramas_bad/
+/panoramas_test/
+/ocr/
+*.log
