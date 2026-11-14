@@ -1,7 +1,7 @@
 /* report_filter.js — 絞り込み・並べ替え・表示。report_card.js の後に埋め込む。 */
 const checked = g => $$(`input[data-g="${g}"]:checked`).map(e => e.value);
 const num = id => { const v = $(id).value; return v === '' ? null : +v; };
-const GROUPS = ['purposes', 'type', 'sp', 'berry', 'skill', 'sub', 'ing', 'natUp', 'natDown'];
+const GROUPS = ['type', 'sp', 'berry', 'skill', 'sub', 'ing', 'natUp', 'natDown'];
 const SORTS = {
   total: (a, b) => a.rank - b.rank,
   no: (a, b) => a.id.localeCompare(b.id),
@@ -18,13 +18,13 @@ const PAGE = 60;
 // 検索用の文字列(全部の項目を連結)
 DATA.forEach(d => {
   d.text = norm([d.id, d.name, d.nick, d.type, d.sp + 'とくい', d.berry, d.skill, d.nature, d.ings.join(' '),
-    d.subs.map(s => s[0]).join(' '), d.dessert, d.wiki, d.purposes.map(p => PURPOSE_NAME[p]).join(' ')].join(' '));
+    d.subs.map(s => s[0]).join(' '), d.dessert, d.wiki].join(' '));
 });
 
 function filters() {
   return {
     words: norm($('#q').value).split(/\s+/).filter(Boolean),
-    purposes: checked('purposes'), type: checked('type'), sp: checked('sp').map(v => v.replace(/とくい$/, '')),
+    type: checked('type'), sp: checked('sp').map(v => v.replace(/とくい$/, '')),
     berry: checked('berry'), skill: checked('skill'), sub: checked('sub'), ing: checked('ing'),
     natUp: checked('natUp'), natDown: checked('natDown'),
     mT: +$('#mT').value, m: AX.map((_, a) => +$('#m' + a).value),
@@ -35,7 +35,6 @@ function filters() {
 
 function matches(d, f) {
   if (f.words.length && !f.words.every(w => d.text.includes(w))) return false;
-  if (f.purposes.length && !f.purposes.some(p => d.purposes.includes(p))) return false;
   if (f.type.length && !f.type.includes(d.type)) return false;
   if (f.sp.length && !f.sp.includes(d.sp)) return false;
   if (f.berry.length && !f.berry.includes(d.berry)) return false;
@@ -58,7 +57,6 @@ function matches(d, f) {
 
 function summary(f) {
   const chips = [];
-  checked('purposes').forEach(v => chips.push(PURPOSE_NAME[v]));
   ['type', 'sp', 'berry', 'skill', 'sub', 'ing', 'natUp', 'natDown'].forEach(g => checked(g).forEach(v => chips.push(v)));
   if (f.mT) chips.push('総合 月' + f.mT + '以上');
   AX.forEach((k, a) => f.m[a] && chips.push(k + ' 月' + f.m[a] + '以上'));

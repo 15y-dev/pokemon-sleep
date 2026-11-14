@@ -39,8 +39,6 @@ TYPE_COLOR = {
     "エスパー": "#d4577f", "むし": "#8aa31e", "いわ": "#9b8d58", "ゴースト": "#625494", "ドラゴン": "#4b5bc4",
     "あく": "#5a4a48", "はがね": "#6f8fa3", "フェアリー": "#d884b8",
 }
-PURPOSE_NAME = {k: v[0] for k, v in sl.PURPOSES.items()}
-PURPOSE_SHORT = {k: v[0].split("(")[0] for k, v in sl.PURPOSES.items()}
 
 
 def write_images(id_, anchors):
@@ -101,7 +99,6 @@ def item(row, r):
         "m": row["★"], "pt": row["点数"],
         "ax": [[row[f"月:{k}"], row[f"点:{k}"], row[f"順位:{k}"]] for k in AX],
         "rank": row["順位:総合"],
-        "purposes": row["目的"],
         "helpNow": sec_now, "help": sec_after, "helpText": row["おてつだい時間(計算後)"],
         "carryNow": row["最大所持数(画面)"], "carry": row["最大所持数(計算後)"],
         "color": TYPE_COLOR.get(row["タイプ"] or "", "#8a84a0"),
@@ -155,7 +152,6 @@ def moon_select(sid, title):
 
 
 def build_panel(items):
-    purposes = [(k, PURPOSE_SHORT[k], sum(k in it["purposes"] for it in items)) for k in sl.PURPOSES]
     types = [(t, t, n) for t, n in counted(it["type"] for it in items)]
     sps = [(t, t + "とくい", n) for t, n in counted(it["sp"] for it in items)]
     skills = [(t, t, n) for t, n in counted(it["skill"] for it in items)]
@@ -175,8 +171,7 @@ def build_panel(items):
         '<label class="opt one"><input type="checkbox" id="favOnly"><span>お気に入りだけ</span></label>'
         '<label class="opt one"><input type="checkbox" id="dessertOnly"><span>新デザートの食材を持つ</span></label>'
         '<label class="opt one"><input type="checkbox" id="wikiOnly"><span>Wiki候補(アンバー渓谷)</span></label></div>',
-        check_group("purposes", "目的", purposes, True, "選んだ目的のどれかに当てはまる個体"),
-        check_group("type", "タイプ", types),
+        check_group("type", "タイプ", types, True),
         check_group("sp", "とくい", sps),
         check_group("berry", "きのみ", berries),
         check_group("skill", "メインスキル", skills),
@@ -186,6 +181,46 @@ def build_panel(items):
         check_group("natDown", "せいかく(下がる効果)", downs),
     ]
     return "".join(parts)
+
+# 組み込みのプリセット(ワンクリックで、条件をまとめて設定する)。
+# 条件のキー: type/sp/berry/skill/natUp/natDown=選択(どれか), sub/ing=すべて持つ,
+#   mT=総合の月の下限, m=角度ごとの月の下限(おてつだい・食材・スキル・きのみ・サポートの順の配列),
+#   helpMax=おてつだい時間(分以下), carryMin=最大所持数(個以上), lvMin/lvMax, fav/dessert/wiki=ON/OFF
+# 「sort」は並べ替え(total, ax0〜ax4=角度, helpFast, carryMany, lvHigh, lvLow, no)
+# メインスキルは、別名つきの名前(例: ほっぺすりすり(げんきエールS))があるので、実際の名前の一覧から作る。
+def skills_with(*keys):
+    names = sorted({r.get("main_skill") for r in _RECS if r.get("main_skill") and any(k in r["main_skill"] for k in keys)})
+    return names
+
+
+_RECS = []
+FAV = ["カゴのみ", "ラムのみ", "ヤチェのみ"]
+
+
+def make_presets():
+    return [
+        {"name": "デザート・ドリンク用の食材集め", "note": "食材とくいで、新デザートの食材を持つ。食材の評価が高い順",
+         "state": {"sp": ["食材", "オール"], "dessert": True, "sort": "ax1"}},
+        {"name": "アンバー渓谷で育てる", "note": "好物のきのみ(カゴ・ラム・ヤチェ)。総合の評価が高い順",
+         "state": {"berry": FAV, "sort": "total"}},
+        {"name": "好物のきのみ集め", "note": "きのみとくいで、アンバー渓谷の好物。きのみの評価が高い順",
+         "state": {"sp": ["きのみ"], "berry": FAV, "sort": "ax3"}},
+        {"name": "料理スキル", "note": "スキルとくいで、料理パワーアップ・チャンス・アシストを持つ。スキルの評価が高い順",
+         "state": {"sp": ["スキル"], "skill": skills_with("料理パワーアップ", "料理チャンス", "料理アシスト"), "sort": "ax2"}},
+        {"name": "ヒーラー", "note": "げんきオール・げんきエールを持つ。スキルの評価が高い順",
+         "state": {"skill": skills_with("げんきオール", "げんきエール"), "sort": "ax2"}},
+        {"name": "おてつだいが速い", "note": "おてつだい時間(計算後)が30分以下。短い順",
+         "state": {"helpMax": 30, "sort": "helpFast"}},
+        {"name": "たくさん持てる", "note": "最大所持数(計算後)が40個以上。多い順",
+         "state": {"carryMin": 40, "sort": "carryMany"}},
+        {"name": "金スキル持ち", "note": "おてつだいボーナスを持つ。おてつだいの評価が高い順",
+         "state": {"sub": ["おてつだいボーナス"], "sort": "ax0"}},
+        {"name": "とくに評価が高い", "note": "総合の月が4つ以上",
+         "state": {"mT": 4, "sort": "total"}},
+        {"name": "お気に入り", "note": "お気に入りに入れたポケモン",
+         "state": {"fav": True, "sort": "total"}},
+    ]
+
 
 def read(*names):
     return "\n".join((HERE / n).read_text(encoding="utf-8") for n in names)
@@ -198,8 +233,9 @@ SORT_OPTIONS = [("total", "総合(点数の高い順)")] + [(f"ax{a}", f"{k}の�
 
 def build(recs, make_images):
     items = build_data(recs, make_images)
+    _RECS[:] = recs
     meta = {
-        "purposeShort": PURPOSE_SHORT,
+        "presets": make_presets(),
         "unlock": ["1"] + [str(x) for x in sl.UNLOCK_LV[1:]],
         "axisNote": {k: sl.AXES[k][2] for k in AX},
     }
@@ -213,11 +249,12 @@ def build(recs, make_images):
 <title>ポケモンスリープ 手持ちポケモン一覧</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="{FONTS}" rel="stylesheet">
-<style>{read("report_base.css", "report_panel.css", "report_card.css")}</style></head><body>
+<style>{read("report_base.css", "report_panel.css", "report_card.css", "report_presets.css")}</style></head><body>
 <header class="hero"><div class="moon"></div><small>Pokémon Sleep — a field guide to the sleepers</small>
 <h1>手持ちポケモン一覧</h1>
 <p>全{len(items)}匹を表示しています。条件を選んで、探してください。月の数(評価)は、サブスキルとせいかくから決めた目安で、今のレベルは見ていません。
 おてつだい時間と最大所持数は、未解放のスキルも反映した「計算後」の値です。作成日 <span style="white-space:nowrap">{date.today():%Y-%m-%d}</span>。</p></header>
+<nav class="presets" aria-label="プリセット"><span class="plabel">プリセット</span><div id="presetList"></div></nav>
 <div class="bar">
 <button class="btn" id="panelToggle" type="button">絞り込み</button>
 <input id="q" type="search" placeholder="名前・タイプ・スキル・食材で検索(スペースで複数)" aria-label="検索">
@@ -236,7 +273,7 @@ def build(recs, make_images):
 画像は <b>report_img</b> と <b>panoramas</b> のフォルダを、report.html と同じ場所に置いてください。</footer>
 <dialog id="viewer"><img alt="全体の画像"><div class="cap"></div></dialog>
 <script>{data_js}</script>
-<script>{read("report_card.js", "report_filter.js")}</script></body></html>"""
+<script>{read("report_card.js", "report_filter.js", "report_presets.js")}</script></body></html>"""
 
 
 def main():

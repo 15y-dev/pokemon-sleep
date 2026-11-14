@@ -73,7 +73,6 @@ article.card:hover .shot{rotate:0deg}
 .note .good{color:#1f7a66;border-color:#2f9e8688;background:#2f9e8614}
 .note .bad{color:var(--rose);border-color:#c4455f88;background:#c4455f12}
 .note .wiki{color:#8a5a00;border-color:#e0a82e;background:#ffd86b44}
-.note .purp{color:#4b3f7a;border-color:#4b3f7a66;background:#4b3f7a10}
 
 /* スキル部の画像(切手のように貼る) */
 .skillshot{display:block;width:calc(100% - 32px);margin:0 16px 16px;border:0;padding:6px;background:#fffdf6;cursor:zoom-in;

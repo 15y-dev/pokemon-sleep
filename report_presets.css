@@ -1,0 +1,16 @@
+/* report_presets.css — プリセットの帯(ヘッダーと操作帯のあいだ)。 */
+.presets{position:relative;z-index:1;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 5vw 12px}
+.plabel{font-family:var(--serif);font-weight:800;color:var(--moonlit);font-size:.95rem;letter-spacing:.08em}
+.plabel::after{content:"";display:inline-block;width:26px;height:1px;background:var(--gold);margin-left:10px;vertical-align:middle}
+#presetList{display:flex;flex-wrap:wrap;gap:7px;flex:1 1 auto}
+.pchip{display:inline-flex;align-items:stretch;border-radius:999px;overflow:hidden;border:1px solid #2f3a7c;background:#ffffff0a;transition:.2s}
+.pchip:hover{border-color:var(--gold2)}
+.pbtn{font:inherit;font-size:.86rem;color:var(--lilac);background:none;border:0;padding:5px 14px;cursor:pointer}
+.pbtn:hover{color:var(--gold2)}
+.pbtn.cur{background:var(--gold2);color:#2a2438;font-weight:700}
+.pbtn:focus-visible,.pdel:focus-visible{outline:2px solid var(--gold2);outline-offset:-2px}
+.psave{border-style:dashed;border-radius:999px;padding:5px 14px;color:#8e98d8}
+.pchip.own{border-style:dashed;border-color:#8e98d8}
+.pdel{font:inherit;font-size:.9rem;line-height:1;color:#7f89c4;background:none;border:0;border-left:1px solid #2f3a7c;padding:0 9px;cursor:pointer}
+.pdel:hover{color:var(--rose);background:#ffffff10}
+@media (max-width:900px){.presets{padding-top:4px}.plabel::after{display:none}}

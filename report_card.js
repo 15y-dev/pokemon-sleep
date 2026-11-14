@@ -4,7 +4,6 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&
 const hms = s => { if (!s) return '-'; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
   return (h ? h + '時間' : '') + (m || h ? m + '分' : '') + x + '秒'; };
 const norm = s => String(s).normalize('NFKC').toLowerCase();
-const PURPOSE_NAME = META.purposeShort;
 
 function moons(n, cls = '') {
   return `<span class="moons ${cls}" role="img" aria-label="${n} / 5">` +
@@ -23,7 +22,6 @@ function card(d, focus) {
   const notes = [];
   if (d.dessert) notes.push(`<span class="good">新デザート食材: ${esc(d.dessert)}</span>`);
   if (d.wiki) notes.push(`<span class="wiki">Wiki候補: ${esc(d.wiki)}</span>`);
-  d.purposes.forEach(p => notes.push(`<span class="purp">${esc(PURPOSE_NAME[p])}</span>`));
   const imgT = d.img[0] ? `<button class="shot" data-open="${d.id}" aria-label="全体の画像を開く"><img loading="lazy" alt="No.${d.id} の上部" src="report_img/${d.id}_t.jpg"></button>` : '';
   const imgS = d.img[1] ? `<button class="skillshot" data-open="${d.id}" aria-label="全体の画像を開く"><img loading="lazy" alt="No.${d.id} のスキル部" src="report_img/${d.id}_s.jpg"></button>` : '';
   const helpNote = helpDiff > 0 ? `いま ${hms(d.helpNow)}(未解放のスキルで−${hms(helpDiff)})` : 'いまの値のまま';
