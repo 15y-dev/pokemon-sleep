@@ -235,10 +235,43 @@ $env:PYTHONIOENCODING='utf-8'
 - 画像は Google のサーバーに送信されます。
 - 同じ画像を何度も処理しないよう、まず `--limit 3` で確認してから全件を実行してください。
 
+## 項目の抽出(CSV / JSON)
+
+OCR 済みの JSON(`ocr` フォルダ)から、画面の項目を取り出して表にします。通信はしません(ローカルで完結)。
+文字の位置(座標)を使って、ラベルの右隣や枠の中の値だけを読みます。追加インストールは不要です。
+
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+.\.venv\Scripts\python.exe extract_fields.py                  # 全件
+.\.venv\Scripts\python.exe extract_fields.py --ids 1,2,10-12  # 指定した番号だけ(ファイルは書かず、画面に表示)
+```
+
+| 出力 | 内容 |
+|---|---|
+| `pokemon.csv` | 1匹1行。Excel で開ける(UTF-8 BOM つき) |
+| `pokemon.json` | 同じ内容(JSON) |
+| `review.csv` | 要確認の値。どの画像の、どの項目が、なぜ怪しいか(重要度つき) |
+
+### 取り出せる項目
+- **基本**: `sp`、`level`、`name_text`(名前の欄。ニックネームのこともある)、`candy_species`(「◯◯のアメ」の◯◯。進化前の系統名)、`name_is_candy_species`、`exp_to_next`、`candy_count`、`mood_percent`、`specialty`(とくいなもの)、`ribbon_present`、`has_evolve_button`
+- **おてつだい能力**: `berry_count`、`ingredient1〜3_count`、`ingredient2_locked`、`ingredient3_locked`、`help_interval_sec`、`max_carry`
+- **スキル**: `main_skill`、`main_skill_level`、`main_skill_desc`、`sub_skill1〜5`、`sub_skill1〜5_unlocked`
+- **詳細ステータス**: `nature`、`nature_up`、`nature_down`、`nature_neutral`、`met_date`、`field`、`field_ex`、`sleep_minutes`
+
+### 取り出せないもの(文字ではなくアイコンのため)
+きのみ・食材の種類、タイプ、性別、リボンの種類、お気に入りの星、色違いなど。見本画像との照合が別途必要です。
+
+### 補正と要確認
+- 名前の候補が決まっている項目(せいかく、サブスキル、フィールドなど)は、一覧と照合して、OCR の誤読を直します。補正したものは `review.csv` に `low` で残ります。
+- 値が取れない、明らかにおかしい、矛盾する場合は `high` / `mid` で `review.csv` に出ます。
+- 解放済みか(食材2・3、サブスキル2〜5)は、レベルと鍵バッジから判断します。
+- 一緒に眠った時間は、手前の「Zz」のアイコンを位置で切り離し、「分」の誤読(例: 053)を補正し、出会ってからの日数より長い値を検出します(`--as-of` で基準日を指定可)。
+
 ## ファイル
 
 - `adb_panorama.py`: 撮影スクリプト本体
 - `ocr_vision.py`: Google Cloud Vision API で OCR して、結果を1枚ずつ JSON で保存するスクリプト
 - `ocr\`: OCR 結果の保存先(自動作成)
+- `extract_fields.py`: OCR 結果から項目を取り出して `pokemon.csv` / `pokemon.json` / `review.csv` を作るスクリプト
 - `panoramas\`: 連続撮影の出力先(自動作成)
 - `.venv\`: Python の仮想環境
