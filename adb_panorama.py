@@ -90,6 +90,8 @@ def main():
     ap.add_argument("--max-steps", type=int, default=50)
     ap.add_argument("--top", type=int, help="上部固定部分の高さ(px)。省略で自動検出")
     ap.add_argument("--bottom", type=int, help="下部固定部分の高さ(px)。省略で自動検出")
+    ap.add_argument("--margin", type=int, default=12,
+                    help="自動検出した固定部分に足す余白(px)。境界の影や1px線を継ぎ目に出さないため")
     ap.add_argument("--thresh", type=float, default=0.9)
     ap.add_argument("-o", "--out", default="panorama.png")
     a = ap.parse_args()
@@ -108,8 +110,9 @@ def main():
         print("スクロールしませんでした。1枚だけ保存します。")
         cv2.imwrite(a.out, first)
         return
-    top = a.top if a.top is not None else fixed[0]
-    bottom = a.bottom if a.bottom is not None else fixed[1]
+    # 固定部分が存在する側にだけ余白を足す(固定部分が無い側は 0 のまま)
+    top = a.top if a.top is not None else (fixed[0] + a.margin if fixed[0] > 0 else 0)
+    bottom = a.bottom if a.bottom is not None else (fixed[1] + a.margin if fixed[1] > 0 else 0)
     print(f"固定部分: 上 {top}px / 下 {bottom}px")
 
     body = lambda img: img[top:H - bottom]
