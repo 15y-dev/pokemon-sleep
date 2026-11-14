@@ -1,0 +1,84 @@
+/* report_card.css — 標本カード。和紙色の台紙・月相の★・睡眠タイムライン・ポラロイド風の画像。 */
+article.card{--tc:#8a84a0;position:relative;color:var(--ink);border-radius:4px 4px 6px 6px;
+  background:
+    repeating-linear-gradient(0deg,#0000 0 27px,#2a24380a 27px 28px),
+    linear-gradient(170deg,var(--paper),var(--paper2));
+  box-shadow:0 1px 0 #fff8 inset,0 18px 38px #0008,0 2px 0 #0004;
+  border-top:6px solid var(--tc);opacity:0;transform:translateY(16px) rotate(var(--tilt,0deg));
+  animation:rise .7s cubic-bezier(.2,.8,.2,1) forwards;transition:transform .25s,box-shadow .25s}
+@keyframes rise{to{opacity:1;transform:rotate(var(--tilt,0deg))}}
+article.card:hover{transform:translateY(-4px) rotate(0deg);box-shadow:0 26px 50px #000a}
+article.card:nth-child(odd){--tilt:-.25deg}
+article.card:nth-child(even){--tilt:.25deg}
+/* マスキングテープ */
+article.card::before{content:"";position:absolute;top:-15px;left:50%;width:84px;height:22px;margin-left:-42px;
+  background:#ffd86bcc;transform:rotate(-2.5deg);box-shadow:0 1px 3px #0004;
+  clip-path:polygon(0 8%,4% 0,8% 10%,12% 0,100% 0,96% 50%,100% 100%,0 100%,4% 50%)}
+
+.card .top{display:grid;grid-template-columns:1fr 188px;gap:6px 14px;padding:18px 16px 6px;align-items:start}
+.card .info{min-width:0}
+.rank{display:flex;align-items:center;gap:10px}
+.moons{display:inline-flex;gap:3px}
+.moons i{width:15px;height:15px;border-radius:50%;display:block;background:#2a243822;box-shadow:inset 0 0 0 1px #2a243833}
+.moons i.on{background:radial-gradient(circle at 35% 35%,#fff3c4,#f0b93a 70%);box-shadow:0 0 6px #e0a82e99,inset 0 0 0 1px #b8861e}
+.pts{font-family:var(--num);font-style:italic;font-size:1.5rem;font-weight:600;line-height:1;color:var(--ink)}
+.pts small{font-size:.7rem;font-weight:400;margin-left:2px;color:var(--ink2)}
+.no{margin-left:auto;font-family:var(--num);font-style:italic;font-size:.78rem;color:var(--ink2)}
+.name{font-family:var(--serif);font-weight:800;font-size:1.55rem;line-height:1.25;margin:8px 0 0;letter-spacing:.03em}
+.name small{display:block;font-family:var(--sans);font-weight:400;font-size:.74rem;color:var(--ink2);letter-spacing:0}
+.meta{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 6px}
+.chip{font-size:.72rem;padding:0 9px;border-radius:3px;border:1px solid #2a243833;color:var(--ink);background:#fff6}
+.chip.type{background:var(--tc);border-color:var(--tc);color:#fff;text-shadow:0 1px 0 #0004}
+.chip.lv{font-family:var(--num);font-style:italic;font-weight:600}
+.kv{display:flex;gap:10px;font-size:.8rem;margin:2px 0;color:var(--ink2);align-items:baseline}
+.kv dt{flex:0 0 6.2em;white-space:nowrap;font-size:.72rem;letter-spacing:.04em}
+.kv dd{margin:0;color:var(--ink);font-weight:500;min-width:0}
+.kv dd small{display:block;color:var(--ink2);font-weight:400;font-size:.7rem;line-height:1.4}
+.kv dd small.inline{display:inline}
+dl.facts{margin:0}
+
+/* ポラロイド風の写真(上部) */
+.shot{display:block;border:0;padding:7px 7px 24px;background:#fffdf6;cursor:zoom-in;rotate:1.6deg;transition:rotate .25s;
+  box-shadow:0 6px 14px #0004,0 0 0 1px #0001;position:relative}
+article.card:hover .shot{rotate:0deg}
+.shot img{display:block;width:100%;height:auto;background:#eee}
+.shot::after{content:"▸ 全体を見る";position:absolute;bottom:5px;left:0;right:0;text-align:center;font-size:.64rem;letter-spacing:.2em;color:var(--ink2)}
+
+/* 睡眠タイムライン(サブスキル) */
+.tl{list-style:none;margin:0;padding:6px 16px 4px 28px;position:relative;display:grid;gap:1px}
+.tl::before{content:"";position:absolute;left:34px;top:14px;bottom:14px;border-left:2px dashed #2a243844}
+.tl li{position:relative;display:flex;align-items:center;gap:10px;font-size:.84rem;padding:2px 0 2px 22px;color:var(--ink)}
+.tl li::before{content:"";position:absolute;left:0;top:50%;width:13px;height:13px;margin-top:-6.5px;border-radius:50%;
+  background:var(--paper);box-shadow:inset 0 0 0 2px #2a243855}
+.tl li.on::before{background:radial-gradient(circle at 35% 35%,#fff3c4,#e0a82e);box-shadow:0 0 0 2px #fff8,0 0 8px #e0a82ecc}
+.tl .lv{font-family:var(--num);font-style:italic;font-size:.7rem;color:var(--ink2);min-width:2.6em}
+.tl li.off .nm{color:#2a243880}
+.tl li.hit .nm{background:linear-gradient(180deg,#0000 55%,#ffd86bd9 55%);padding:0 3px;font-weight:700}
+.tl li.off.hit .nm{background:linear-gradient(180deg,#0000 55%,#ffd86b66 55%);font-weight:500}
+
+/* 気づき */
+.note{display:flex;flex-wrap:wrap;gap:6px;padding:6px 16px 12px}
+.note span{font-size:.72rem;padding:1px 9px;border-radius:3px;border:1px solid}
+.note .good{color:#1f7a66;border-color:#2f9e8688;background:#2f9e8614}
+.note .bad{color:var(--rose);border-color:#c4455f88;background:#c4455f12}
+.note .wiki{color:#8a5a00;border-color:#e0a82e;background:#ffd86b44}
+
+/* スキル部の画像(切手のように貼る) */
+.skillshot{display:block;width:calc(100% - 32px);margin:0 16px 16px;border:0;padding:6px;background:#fffdf6;cursor:zoom-in;
+  box-shadow:0 3px 8px #0003,0 0 0 1px #0001}
+.skillshot img{display:block;width:100%;height:auto}
+
+/* 全体画像の表示 */
+dialog{border:0;padding:0;background:transparent;max-width:min(96vw,540px);max-height:94vh;overflow:auto}
+dialog::backdrop{background:#04061aee;backdrop-filter:blur(4px)}
+dialog img{display:block;width:100%;border:8px solid #fffdf6;border-bottom-width:30px;box-shadow:0 24px 70px #000}
+dialog .cap{color:var(--moonlit);text-align:center;font-family:var(--serif);font-size:.95rem;padding:10px}
+@media (max-width:560px){
+  .card .top{grid-template-columns:minmax(0,1fr) 112px;gap:6px 10px;padding:18px 12px 6px}
+  .rank{flex-wrap:wrap;gap:2px 10px}
+  .no{margin-left:0;flex-basis:100%;order:3}
+  .name{font-size:1.3rem}
+  .kv{gap:6px}.kv dt{flex-basis:4.6em}
+  .tl{padding-left:20px}.tl::before{left:26px}
+}
+@media (prefers-reduced-motion:reduce){article.card{animation:none;opacity:1;transform:rotate(var(--tilt,0deg))}body::before{animation:none}}

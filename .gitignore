@@ -19,3 +19,5 @@ __pycache__/
 /pokemon.csv
 /review.csv
 /shortlists/
+# HTML レポート(スクリーンショットを埋め込むので大きい。shortlist.py から再生成できる)
+/report.html

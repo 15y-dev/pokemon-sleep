@@ -1,0 +1,65 @@
+/* report_base.css — 「夜の標本帖」: 夜空の上に、和紙色の標本カードを並べる。全体・操作パネル・見出し。 */
+:root{
+  --night:#0b1030; --night2:#161d4a; --ink:#2a2438; --ink2:#6b6479;
+  --paper:#f2ead8; --paper2:#e8dcc0; --gold:#e0a82e; --gold2:#ffd86b; --moonlit:#fff3c4;
+  --mint:#2f9e86; --rose:#c4455f; --lilac:#cfd6ff;
+  --serif:"Shippori Mincho","Yu Mincho","Hiragino Mincho ProN",serif;
+  --sans:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;
+  --num:"Fraunces","Shippori Mincho",serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{margin:0;color:var(--lilac);font-family:var(--sans);line-height:1.65;min-height:100vh;
+  background:
+    radial-gradient(900px 520px at 88% -8%,#3b3f94 0%,transparent 62%),
+    radial-gradient(800px 520px at -8% 30%,#1f2f7a 0%,transparent 58%),
+    linear-gradient(180deg,var(--night),#080b22 70%);
+  background-attachment:fixed}
+/* 星と、紙の粒(ノイズ) */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.7;z-index:0;
+  background-image:
+    radial-gradient(1.3px 1.3px at 12% 18%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 28% 72%,#cfd6ff 50%,transparent 51%),
+    radial-gradient(1.6px 1.6px at 47% 9%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 63% 41%,#cfd6ff 50%,transparent 51%),
+    radial-gradient(1.4px 1.4px at 78% 83%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 91% 27%,#cfd6ff 50%,transparent 51%),
+    radial-gradient(1px 1px at 5% 55%,#fff 50%,transparent 51%),radial-gradient(1.2px 1.2px at 36% 38%,#cfd6ff 50%,transparent 51%);
+  background-size:560px 460px;animation:twinkle 6s ease-in-out infinite alternate}
+@keyframes twinkle{from{opacity:.45}to{opacity:.85}}
+main,header,nav,footer{position:relative;z-index:1}
+
+/* ---- ヘッダー ---- */
+header.hero{padding:60px 6vw 26px}
+.hero .moon{position:absolute;right:7vw;top:36px;width:96px;height:96px;border-radius:50%;
+  box-shadow:inset -28px 9px 0 0 var(--gold2);filter:drop-shadow(0 0 26px #ffd86bb0)}
+.hero small{font-family:var(--num);font-style:italic;letter-spacing:.22em;color:#8e98d8;font-size:.82rem}
+.hero h1{font-family:var(--serif);font-weight:800;font-size:clamp(2rem,4.6vw,3.3rem);margin:.15em 0 .2em;letter-spacing:.06em;color:var(--moonlit)}
+.hero p{margin:0;color:#9aa3d6;max-width:48em;font-size:.95rem}
+
+/* ---- 操作パネル(固定) ---- */
+.bar{position:sticky;top:0;z-index:10;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:10px 6vw;
+  background:#0b1030e6;backdrop-filter:blur(10px);border-block:1px solid #2a3470}
+.bar .tabs{display:flex;gap:6px;flex-wrap:wrap}
+.bar .tabs a{color:var(--lilac);text-decoration:none;font-size:.88rem;padding:5px 13px;border:1px solid #2f3a7c;border-radius:999px;transition:.2s}
+.bar .tabs a:hover,.bar .tabs a.cur{background:var(--gold2);border-color:var(--gold2);color:#2a2438}
+.bar .tabs a b{font-family:var(--num);font-style:italic;margin-left:.45em;font-weight:600}
+.bar .ctl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-left:auto;font-size:.82rem;color:#9aa3d6}
+.bar input[type=search],.bar select{font:inherit;color:var(--moonlit);background:#141b48;border:1px solid #2f3a7c;border-radius:8px;padding:5px 10px;min-width:0}
+.bar input[type=search]{width:16em}
+.bar input:focus,.bar select:focus{outline:2px solid var(--gold2);outline-offset:1px}
+.bar label.chk{display:flex;align-items:center;gap:5px;cursor:pointer}
+.bar #shown{font-family:var(--num);font-style:italic;color:var(--gold2)}
+
+/* ---- 目的ごとのセクション ---- */
+section.purpose{padding:42px 6vw 12px}
+section.purpose h2{font-family:var(--serif);font-weight:800;font-size:1.7rem;margin:0;color:var(--moonlit);display:flex;align-items:baseline;gap:.8em;flex-wrap:wrap}
+section.purpose h2 .n{font-family:var(--num);font-style:italic;font-weight:500;font-size:1rem;color:var(--gold2)}
+section.purpose .how{color:#9aa3d6;font-size:.88rem;margin:.2em 0 22px;max-width:60em;border-left:2px solid var(--gold);padding-left:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(470px,100%),1fr));gap:30px 26px}
+.grid>*{min-width:0}
+.hero small{display:block;overflow-wrap:anywhere}
+html,body{overflow-x:hidden}
+.empty,.none{color:#9aa3d6;padding:14px 0}
+footer{padding:40px 6vw 70px;color:#7f89c4;font-size:.8rem;border-top:1px solid #2a3470;margin-top:40px}
+footer b{color:var(--gold2);font-weight:500}
+body.noskill .skillshot{display:none}
+@media (max-width:560px){.grid{grid-template-columns:1fr}.hero .moon{display:none}.bar .ctl{margin-left:0}
+  .bar{position:static}html{scroll-padding-top:12px}section.purpose h2{font-size:1.4rem}}
