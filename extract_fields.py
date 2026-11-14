@@ -32,7 +32,24 @@ HERE = Path(__file__).resolve().parent
 NATURES = ["がんばりや", "さみしがり", "ゆうかん", "いじっぱり", "やんちゃ", "ずぶとい", "すなお", "のんき", "わんぱく",
            "のうてんき", "おくびょう", "せっかち", "まじめ", "ようき", "むじゃき", "ひかえめ", "おっとり", "れいせい",
            "てれや", "うっかりや", "おだやか", "おとなしい", "なまいき", "しんちょう", "きまぐれ"]
-NEUTRAL_NATURES = {"がんばりや", "すなお", "てれや", "きまぐれ", "まじめ"}   # 「せいかくによる特徴なし」の5種
+# 性格ごとの「上がる効果」「下がる効果」(None=特徴なし)。
+# 元は PokeAPI の natures.csv(上がる・下がるステータスの対応)で、ポケモンスリープでの効果名への対応は、
+# 629匹の実データ(性格と、画面に出ている効果)で全25性格について確認した。
+NATURE_TABLE = {
+    "がんばりや": (None, None), "すなお": (None, None), "てれや": (None, None), "きまぐれ": (None, None),
+    "まじめ": (None, None),
+    "さみしがり": ("おてつだいスピード", "げんき回復量"), "いじっぱり": ("おてつだいスピード", "食材おてつだい確率"),
+    "やんちゃ": ("おてつだいスピード", "メインスキル発生確率"), "ゆうかん": ("おてつだいスピード", "EXP獲得量"),
+    "ずぶとい": ("げんき回復量", "おてつだいスピード"), "わんぱく": ("げんき回復量", "食材おてつだい確率"),
+    "のうてんき": ("げんき回復量", "メインスキル発生確率"), "のんき": ("げんき回復量", "EXP獲得量"),
+    "ひかえめ": ("食材おてつだい確率", "おてつだいスピード"), "おっとり": ("食材おてつだい確率", "げんき回復量"),
+    "うっかりや": ("食材おてつだい確率", "メインスキル発生確率"), "れいせい": ("食材おてつだい確率", "EXP獲得量"),
+    "おだやか": ("メインスキル発生確率", "おてつだいスピード"), "おとなしい": ("メインスキル発生確率", "げんき回復量"),
+    "しんちょう": ("メインスキル発生確率", "食材おてつだい確率"), "なまいき": ("メインスキル発生確率", "EXP獲得量"),
+    "おくびょう": ("EXP獲得量", "おてつだいスピード"), "せっかち": ("EXP獲得量", "げんき回復量"),
+    "ようき": ("EXP獲得量", "食材おてつだい確率"), "むじゃき": ("EXP獲得量", "メインスキル発生確率"),
+}
+NEUTRAL_NATURES = {n for n, v in NATURE_TABLE.items() if v == (None, None)}   # 「せいかくによる特徴なし」の5種
 NATURE_EFFECTS = ["おてつだいスピード", "EXP獲得量", "げんき回復量", "食材おてつだい確率", "メインスキル発生確率"]
 SUBSKILLS = ["おてつだいスピードS", "おてつだいスピードM", "食材確率アップS", "食材確率アップM", "スキル確率アップS",
              "スキル確率アップM", "最大所持数アップS", "最大所持数アップM", "最大所持数アップL", "スキルレベルアップS",
@@ -451,12 +468,14 @@ def ex_detail(c, rec, Y):
             effs[0][1], effs[1][1] = d0, d1
     elif not neutral:
         c.flag("nature_effect", str(effs), f"せいかくの効果が{len(effs)}個しか読めない", "mid")
-    rec["nature_up"] = next((e for e, d in effs if d == "up"), None)
-    rec["nature_down"] = next((e for e, d in effs if d == "down"), None)
-    rec["nature_neutral"] = neutral
+    seen_up = next((e for e, d in effs if d == "up"), None)      # 画面から読めた効果(参考。性格の確認に使う)
+    seen_down = next((e for e, d in effs if d == "down"), None)
+    rec["nature_up"], rec["nature_down"], rec["nature_neutral"] = seen_up, seen_down, neutral
     if nat_state in ("unknown", "empty"):
-        # 名前の前半が読めないことがある(「てれや」→「や」)。末尾が一致し、「特徴なし」の有無とも合う候補が1つだけなら採用する
-        cand = [n for n in NATURES if raw and n.endswith(raw) and (n in NEUTRAL_NATURES) == neutral]
+        # 名前の前半が読めないことがある(「てれや」→「や」)。末尾が一致し、画面の効果(上がる・下がる、特徴なし)とも
+        # 合う候補が1つだけなら採用する
+        cand = [n for n in NATURES if raw and n.endswith(raw) and (n in NEUTRAL_NATURES) == neutral
+                and (neutral or NATURE_TABLE[n] == (seen_up, seen_down))]
         if len(cand) > 1 and nat_right is not None:
             # 枠の中央(x≈198)に1文字約22pxで並ぶので、右端の位置から文字数を推定して絞る
             exp_right = lambda n: 198 + 11 * len(n)
@@ -475,6 +494,18 @@ def ex_detail(c, rec, Y):
             c.flag("nature", raw, "せいかくの一覧に無い", "mid")
         else:
             c.flag("nature", "", "せいかくが読めない", "high")
+
+    # 上がる・下がる効果は、性格で決まる。性格が決まったら、表から求める(矢印を読む必要はない)。
+    # 画面から読めた効果は、性格の読み間違いを見つける検証にだけ使う。
+    nat = rec.get("nature")
+    if nat in NATURE_TABLE:
+        up, down = NATURE_TABLE[nat]
+        screen = (seen_up, seen_down)
+        if neutral and (up, down) != (None, None):
+            c.flag("nature", nat, f"画面は「特徴なし」だが、{nat}には効果がある(性格の誤読の疑い)", "mid")
+        elif not neutral and (seen_up or seen_down) and screen != (up, down):
+            c.flag("nature", nat, f"画面の効果(上={seen_up}, 下={seen_down})が、{nat}の効果(上={up}, 下={down})と合わない", "mid")
+        rec["nature_up"], rec["nature_down"], rec["nature_neutral"] = up, down, (up, down) == (None, None)
 
     m = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", "".join(l.text for l in c.lines(380, 700, Y + 215, Y + 330)))
     rec["met_date"] = None

@@ -261,6 +261,11 @@ CSV の見出し(日本語)と JSON のキー(内部名)の対応は、`extract_
 - **スキル**: `main_skill`、`main_skill_level`、`main_skill_desc`、`sub_skill1〜5`、`sub_skill1〜5_unlocked`
 - **詳細ステータス**: `nature`、`nature_up`、`nature_down`、`nature_neutral`、`met_date`、`field`、`field_ex`、`sleep_minutes`
 
+### せいかくの効果(上がる・下がる)
+「せいかくで上がる効果」「せいかくで下がる効果」は、画面の矢印を読むのではなく、**せいかくから表で決めています**(25種すべて、`extract_fields.py` の `NATURE_TABLE`)。
+画面から読めた効果は、せいかくの読み間違いを見つける検証にだけ使い、表と食い違えば `review.csv` に出ます。
+表は、ポケモンの性格データ(PokeAPI の `natures.csv`)の上下のステータスを、ポケモンスリープの効果名に対応させたもので、629匹の実データで全25種の対応を確認しました。
+
 ### 種名とニックネーム
 名前の欄は、ニックネームのこともあります。ポケモンの名前一覧(`data\pokemon_names.json`)と照合して、分けています。
 - 名前の欄が一覧にある → `種名`(進化後の名前もこれで確定します。例: アメの系統名が「ヒトカゲ」で、名前の欄が「リザード」なら、種名は「リザード」)
