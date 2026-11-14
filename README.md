@@ -162,8 +162,77 @@ adb が失敗した場合は、5秒おきに最大60回(約5分)、`adb connect`
 - **`adb` が見つからない**: `--adb` にフルパスを指定する。
 - **画面のスワイプが効かない**: 端末側の「USBデバッグ(セキュリティ設定)」で、入力のシミュレーションを許可する(機種による)。
 
+## OCR(Google Cloud Vision API)
+
+撮影した画像を1枚ずつ Google Cloud Vision API で OCR して、結果を画像1枚につき1ファイル(`ocr\0001.json` など)で保存します。
+保存するのは API の応答そのまま(文字ごとの位置情報つき)です。あとから取りたい項目が増えても、OCR をやり直さずに済みます。
+
+### 準備
+
+1. Google Cloud でプロジェクトを作り、**Cloud Vision API を有効にする**
+2. **API キー**を作成する(「APIの制限」で Cloud Vision API だけに絞るのがおすすめです)
+3. キーは環境変数に入れる(ファイルやコマンド履歴に残さないため)
+
+```powershell
+$env:GOOGLE_API_KEY = '作成したAPIキー'
+```
+
+追加のインストールは不要です。Python の標準ライブラリだけで REST API を呼びます。
+
+### 使い方
+
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+.\.venv\Scripts\python.exe ocr_vision.py --dry-run          # API を呼ばずに、処理対象だけ表示する
+.\.venv\Scripts\python.exe ocr_vision.py --limit 3          # 最初の3枚だけ試す
+.\.venv\Scripts\python.exe ocr_vision.py                    # panoramas の全画像を処理する
+.\.venv\Scripts\python.exe ocr_vision.py --force --limit 1  # 保存済みでも取り直して上書きする
+```
+
+- 保存済み(`ocr\NNNN.json` がある)の画像は飛ばします。途中で止まっても、同じコマンドで続きから再開できます。
+- 保存は一時ファイル経由なので、途中で止めても壊れたファイルは残りません。
+- 回数制限(429)やサーバーエラー(5xx)、通信エラーは、待ちながら自動で再試行します。
+- キーが無効、API が未有効、リクエスト不正(HTTP 400/401/403)のときは、続けても無駄なのですぐに中断します。
+- 1枚だけ失敗した場合は、その画像を飛ばして続けます。最後に失敗した画像の一覧を表示し、終了コード 1 で終わります。もう一度実行すれば、失敗した分だけ取り直します。
+
+| オプション | 既定値 | 内容 |
+|---|---|---|
+| `--in-dir` | `panoramas` | OCR する画像のフォルダ |
+| `--out-dir` | `ocr` | 結果(JSON)の保存先 |
+| `--pattern` | `*.png` | 対象のファイル名パターン |
+| `--api-key` | 環境変数 `GOOGLE_API_KEY` | API キー(コマンド履歴に残るので、環境変数を推奨) |
+| `--feature` | `DOCUMENT_TEXT_DETECTION` | OCR の種類(`TEXT_DETECTION` も選べる) |
+| `--lang` | `ja` | 言語のヒント(カンマ区切りで複数可) |
+| `--limit` | なし | 今回処理する枚数の上限 |
+| `--force` | オフ | 保存済みでも取り直す |
+| `--dry-run` | オフ | API を呼ばずに、対象だけ表示する |
+| `--sleep` | `0.1` | 1枚ごとの待ち時間(秒) |
+| `--timeout` | `60` | 1回の通信のタイムアウト(秒) |
+| `--retries` | `5` | 一時的なエラーの再試行回数 |
+
+### JSON の中身
+
+```json
+{
+  "source": "0001.png",
+  "feature": "DOCUMENT_TEXT_DETECTION",
+  "languageHints": ["ja"],
+  "response": { "fullTextAnnotation": { "text": "...", "pages": [ ... ] }, "textAnnotations": [ ... ] }
+}
+```
+
+文字列全体は `response.fullTextAnnotation.text`、単語ごとの位置は `response.textAnnotations` にあります。
+
+### 料金と注意
+
+- 文字検出は、月1000枚まで無料、以降は1000枚あたり約1.5ドルが目安です(最新の料金は Google Cloud の料金表で確認してください)。629枚なら、無料枠の範囲に収まります。
+- 画像は Google のサーバーに送信されます。
+- 同じ画像を何度も処理しないよう、まず `--limit 3` で確認してから全件を実行してください。
+
 ## ファイル
 
 - `adb_panorama.py`: 撮影スクリプト本体
+- `ocr_vision.py`: Google Cloud Vision API で OCR して、結果を1枚ずつ JSON で保存するスクリプト
+- `ocr\`: OCR 結果の保存先(自動作成)
 - `panoramas\`: 連続撮影の出力先(自動作成)
 - `.venv\`: Python の仮想環境
